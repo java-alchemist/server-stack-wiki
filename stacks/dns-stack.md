@@ -13,10 +13,11 @@ The DNS stack provides two core infrastructure services:
 
 | Container | Image | Role |
 |---|---|---|
-| `dns-tailscale` | `tailscale/tailscale:latest` | Userspace tailscaled + SERVE (raw TCP :7007 → dozzle-agent). No HTTPS routes — Caddy handles that. |
-| `dns-pihole` | `pihole/pihole:latest` | DNS resolver, ad/tracker blocking, custom local records via dnsmasq config in `./pihole/dnsmasq.d/`. Listens on host port 5053 (UDP+TCP) loopback only. |
-| `dns-caddy` | `caddy:2-alpine` | HTTPS reverse proxy. Routes by hostname per `./caddy/Caddyfile`. Host ports `8443:443`, `8080:80`. Let's Encrypt cert storage in named volumes. |
-| `dns-dozzle-agent` | `amir20/dozzle:latest` (`agent`) | Reports this stack's containers to the central Dozzle hub over mTLS gRPC on :7007. |
+| `dns-tailscale` | `tailscale/tailscale:latest` | Userspace tailscaled + SERVE (raw TCP :7007 → dozzle-agent). No HTTPS routes — Caddy handles that. Not managed by watchtower (no label). |
+| `dns-pihole` | `pihole/pihole:latest` | DNS resolver, ad/tracker blocking, custom local records via dnsmasq config in `./pihole/dnsmasq.d/`. Listens on host port 5053 (UDP+TCP) loopback only. Managed by watchtower. |
+| `dns-caddy` | `caddy:2-alpine` | HTTPS reverse proxy. Routes by hostname per `./caddy/Caddyfile`. Host ports `8443:443`, `8080:80`. Let's Encrypt cert storage in named volumes. Managed by watchtower. |
+| `dns-dozzle-agent` | `amir20/dozzle:latest` (`agent`) | Reports this stack's containers to the central Dozzle hub over mTLS gRPC on :7007. Managed by watchtower. |
+| `dns-watchtower` | `containrrr/watchtower:latest-ce` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. |
 
 ## Data
 

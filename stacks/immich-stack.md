@@ -10,11 +10,12 @@ Self-hosted Google Photos alternative — photo/video library with metadata extr
 
 | Container | Image | Role |
 |---|---|---|
-| `immich-tailscale` | `tailscale/tailscale:v1.102.5` (pinned) | Userspace tailscaled + SERVE (:443 → immich-server, raw TCP :7007 → dozzle-agent). `TS_USERSPACE: "true"` — kernel TUN mode is not reliable in rootless netns. |
-| `immich-immich-server` | `ghcr.io/immich-app/immich-server:release` (tag from `.env`) | The photo library server. Photos/videos on `/mnt/samba_storage/Immich` (CIFS bind mount). Depends on redis, database, and tailscale. DB password via file mount (`DB_PASSWORD_FILE`). |
-| `immich-redis` | `valkey/valkey:9` (digest-pinned) | Cache/session store for Immich. Ephemeral — data is rebuilt from the database on restart. Healthcheck: `redis-cli ping`. Pinned by digest to avoid breaking changes. |
-| `immich-postgres` | `ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0` (digest-pinned) | PostgreSQL 14 with pgvector extension for ML features. Data in named volume `immich_pgdata` on local disk. Password via file mount (`POSTGRES_PASSWORD_FILE`). `--data-checksums` enabled for data integrity. |
-| `immich-dozzle-agent` | `amir20/dozzle:latest` (`agent`) | Reports this stack's containers to the central Dozzle hub over mTLS gRPC on :7007. |
+| `immich-tailscale` | `tailscale/tailscale:latest` | Userspace tailscaled + SERVE (:443 → immich-server, raw TCP :7007 → dozzle-agent). `TS_USERSPACE: "true"` — kernel TUN mode is not reliable in rootless netns. Not managed by watchtower (no label). |
+| `immich-immich-server` | `ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}` | The photo library server. Photos/videos on `/mnt/samba_storage/Immich` (CIFS bind mount). Depends on redis, database, and tailscale. DB password via file mount (`DB_PASSWORD_FILE`). Managed by watchtower. |
+| `immich-redis` | `valkey/valkey:9-alpine` | Cache/session store for Immich. Ephemeral — data is rebuilt from the database on restart. Healthcheck: `redis-cli ping`. Managed by watchtower (floated tag). |
+| `immich-postgres` | `ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:...` (digest-pinned) | PostgreSQL 14 with pgvector extension for ML features. Data in named volume `immich_pgdata` on local disk. Password via file mount (`POSTGRES_PASSWORD_FILE`). `--data-checksums` enabled for data integrity. NOT managed by watchtower — digest must be updated in lockstep with the app via `make upgrade-db`. |
+| `immich-dozzle-agent` | `amir20/dozzle:latest` (`agent`) | Reports this stack's containers to the central Dozzle hub over mTLS gRPC on :7007. Managed by watchtower. |
+| `immich-watchtower` | `containrrr/watchtower:latest-ce` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. Does NOT touch postgres or tailscale. |
 
 No host ports — everything is exposed through Tailscale SERVE only.
 
@@ -63,6 +64,18 @@ Standard Makefile targets apply. Additional immich-specific:
 |--------|-------------|
 | `immich-health` | Probe the Immich server healthcheck endpoint (`healthcheck.sh`). Useful after startup or upgrade. |
 | `immich-gen-secret` | Append a generated `DB_PASSWORD` to `.env`. Use if resetting the database. |
+| `upgrade-db` | Check postgres digest vs `.postgres-compat` mapping → update compose via worktree + push → pull → runs `make upgrade`. Runs as operator (not stack user). Safe to run when nothing needs changing — exits with "already up to date". |
+
+### Updating the Postgres Digest Mapping
+
+When an Immich release requires a new postgres version, first update `.postgres-compat`:
+```bash
+# Add or replace the mapping entry:
+echo "release|ghcr.io/immich-app/postgres:new-tag@sha256:newdigest" > .postgres-compat
+git add .postgres-compat && git commit -m "update postgres compat for immich vX.Y.Z" && git push
+```
+
+Then run `make upgrade-db` — it detects the mismatch, updates compose in a worktree, pushes back to origin, pulls into the live tree, and upgrades. See [conventions §11](../conventions.md#11-upgrade-process) for details.
 
 ## Resetting the Database
 
@@ -89,4 +102,3 @@ make up
 - PostgreSQL data stays on local disk (named volume). Never bind-mount the DB to a network share — heavy fsync and file-locking make CIFS unreliable for databases.
 - Photos/videos are a bind mount to `/mnt/samba_storage/Immich` — the directory must exist before `make up`. If you mount a new Samba share, re-run `sudo make setup` or create it manually first.
 - `security_opt: label=disable` is required on rootless Podman for bind mounts that cross SELinux contexts (both the CIFS drive and podman socket).
-- Redis (Valkey) and PostgreSQL are both digest-pinned — run `make upgrade` to pull newer images, which triggers a full down/up cycle.

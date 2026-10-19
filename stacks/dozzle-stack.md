@@ -30,8 +30,9 @@ client browser ──→ https://dozzle.<tailnet>.ts.net (SERVE :443 → hub :80
 
 | Container | Image | Role |
 |---|---|---|
-| `dozzle-tailscale` | `tailscale/tailscale:latest` | Userspace tailscaled + SERVE (:443 → hub, raw TCP :7007 not needed — hub is the endpoint) |
-| `dozzle-hub` | `amir20/dozzle:latest` (server mode) | Central log viewer. Reads local podman socket + dials remote agents via mTLS gRPC. Simple auth against pre-seeded `data/users.yml`. API exposed on loopback only (`127.0.0.1:8460`) for operator tooling. |
+| `dozzle-tailscale` | `tailscale/tailscale:latest` | Userspace tailscaled + SERVE (:443 → hub, raw TCP :7007 not needed — hub is the endpoint). Not managed by watchtower (no label). |
+| `dozzle-hub` | `amir20/dozzle:latest` (server mode) | Central log viewer. Reads local podman socket + dials remote agents via mTLS gRPC. Simple auth against pre-seeded `data/users.yml`. API exposed on loopback only (`127.0.0.1:8460`) for operator tooling. Managed by watchtower. |
+| `dozzle-watchtower` | `containrrr/watchtower:latest-ce` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. |
 
 Note: no dozzle-agent in this stack — the hub reads its own containers through the local podman socket mount.
 

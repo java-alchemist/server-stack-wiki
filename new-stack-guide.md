@@ -21,11 +21,13 @@ Create these files (see templates below):
 
 - `README.md` — architecture, services table, secrets layout, ops commands
 - `.env.example` — env var template with comments
-- `podman-compose.yml` — services definition
+- `podman-compose.yml` — services definition (app + tailscale + dozzle-agent + watchtower)
 - `serve-config/serve.json` — Tailscale SERVE routes
 - `setup.sh` — provisioning script (bootstrap + local-setup)
 - `Makefile` — standard targets
 - `shared-deps` — list of shared files this stack reads from `/opt/data/stack-env/`
+
+When making changes to any stack, always update the **server-stack-wiki** in parallel: per-stack docs under `stacks/<stack>-name.md`, and conventions if the change affects fleet-wide patterns. The wiki is the authoritative knowledge base for how stacks work.
 
 Then push to GitHub:
 ```bash
@@ -38,9 +40,10 @@ git push -u origin main
 
 Use `jellyfin-stack/podman-compose.yml` as the reference template. Every stack needs at minimum:
 
-1. **The app container** — your actual service
-2. **Tailscale sidecar** — userspace networking + SERVE reverse proxy
-3. **Dozzle agent** — log collection (mTLS gRPC to hub)
+1. **The app container** — your actual service (label it for watchtower)
+2. **Tailscale sidecar** — userspace networking + SERVE reverse proxy (no label, not managed by watchtower)
+3. **Dozzle agent** — log collection (mTLS gRPC to hub, labeled for watchtower)
+4. **Watchtower** — auto-updates labeled services hourly with rolling restart and rollback
 
 ```yaml
 networks:
@@ -52,6 +55,8 @@ services:
   app:
     image: <image>:<tag>
     container_name: <stack>-app
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"   # watchtower manages this
     environment:
       PUID: "0"           # rootless mode — uid 0 = host stack user
       PGID: "0"
@@ -62,7 +67,7 @@ services:
     restart: unless-stopped
 
   tailscale:
-    image: tailscale/tailscale:v1.102.5
+    image: tailscale/tailscale:latest
     container_name: <stack>-tailscale
     environment:
       TS_AUTH_KEY_FILE: /run/secrets/tailscale_authkey
@@ -81,6 +86,8 @@ services:
   dozzle-agent:
     image: amir20/dozzle:latest
     container_name: <stack>-dozzle-agent
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"   # watchtower manages this
     command: agent --addr :7007 --cert /run/secrets/cert.pem --key /run/secrets/key.pem
     environment:
       PODMAN_HOST: unix:///run/user/${PUID}/podman/podman.sock
@@ -91,8 +98,25 @@ services:
       - ./secrets/.dozzle-key.pem:/run/secrets/key.pem:ro
     restart: unless-stopped
 
-  # ... any databases, caches, etc.
+  # ── Stateful services (databases, etc.) — do NOT label for watchtower ──
+  # ... databases, caches, etc.
+
+  # ── Watchtower: auto-updates labeled services hourly ──
+  watchtower:
+    image: containrrr/watchtower:latest-ce
+    container_name: <stack>-watchtower
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: "3600"
+      WATCHTOWER_ROLLING_RESTART: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_INCLUDE_STOPPED: "false"
+    volumes:
+      - ${PODMAN_SOCKET}:/var/run/docker.sock:ro
+    restart: unless-stopped
 ```
+
+**Image strategy:** Use floating tags (`latest`, `release`, `<major>-alpine`) for services watchtower manages. Pin by digest only for stateful services (databases) that cannot be upgraded automatically — schema migrations can't roll back safely. See [conventions §10](../conventions.md#10-watchtower-auto-update).
 
 ## Step 3: Write serve-config/serve.json
 
@@ -199,9 +223,10 @@ Owns Tailscale node **`<app>`** — UI at `https://<app>.<tailnet>.ts.net`.
 
 | Container | Image | Role |
 |---|---|---|
-| `<stack>-tailscale` | ... | userspace tailscaled + SERVE (:443 → app, raw TCP :7007 → agent) |
-| `<stack>-app` | ... | the main service; config as bind mounts, ... |
-| `<stack>-dozzle-agent` | amir20/dozzle:latest (`agent`) | reports containers to central Dozzle hub over mTLS gRPC on :7007 |
+| `<stack>-tailscale` | ... | userspace tailscaled + SERVE (:443 → app, raw TCP :7007 → agent). Not managed by watchtower. |
+| `<stack>-app` | ... | the main service; config as bind mounts, ... Managed by watchtower. |
+| `<stack>-dozzle-agent` | amir20/dozzle:latest (`agent`) | reports containers to central Dozzle hub over mTLS gRPC on :7007. Managed by watchtower. |
+| `<stack>-watchtower` | containrrr/watchtower:latest-ce | auto-updates labeled services hourly with rolling restart and rollback. |
 
 ## Secrets layout
 

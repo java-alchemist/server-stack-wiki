@@ -149,6 +149,7 @@ Every stack's Makefile provides these standard targets. Lifecycle targets self-e
 | `validate` | Dry-run compose config with env layering |
 | `teardown` | Full removal (containers/volumes/state/secrets/user/group/sudoers) |
 | `local-teardown` | Stack-user phase only (containers, volumes, state, secrets) |
+| `upgrade-db` | Immich-only: check postgres digest vs `.postgres-compat`, update via worktree + push → pull → upgrade. Runs as operator (not stack user). |
 | `help` | List all targets with descriptions |
 
 ### Makefile Variables
