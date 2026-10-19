@@ -15,7 +15,16 @@ The conventions below apply to any host running this fleet pattern. The table sh
 
 All repos live under `java-alchemist` on GitHub. No host ports — everything is tailnet-only via Tailscale SERVE.
 
-## Docs
+## Per-Stack Documentation
+
+Deep dives into how each stack works, its services, data layout, secrets, and gotchas:
+
+- **[dns-stack](stacks/dns-stack.md)** — Pi-hole DNS resolver + Caddy HTTPS reverse proxy
+- **[dozzle-stack](stacks/dozzle-stack.md)** — Central container log viewer hub (mTLS gRPC)
+- **[jellyfin-stack](stacks/jellyfin-stack.md)** — Media streaming server with VA-API transcoding
+- **[immich-stack](stacks/immich-stack.md)** — Self-hosted photo library (PostgreSQL + Valkey)
+
+## Conventions and Guides
 
 - **[conventions.md](conventions.md)** — Shared patterns every stack follows
 - **[new-stack-guide.md](new-stack-guide.md)** — Step-by-step to create a new container stack from scratch
