@@ -17,7 +17,7 @@ The DNS stack provides two core infrastructure services:
 | `dns-pihole` | `pihole/pihole:latest` | DNS resolver, ad/tracker blocking, custom local records via dnsmasq config in `./pihole/dnsmasq.d/`. Published on `127.0.0.1:5053` (loopback). Managed by watchtower. A host-side dnsmasq forwarder bridges LAN port 53 → loopback :5053 for LAN clients and Unifi controller access. |
 | `dns-caddy` | `caddy:2-alpine` | HTTPS reverse proxy. Routes by hostname per `./caddy/Caddyfile`. Host ports `8443:443`, `8080:80`. Let's Encrypt cert storage in named volumes. Managed by watchtower. |
 | `dns-dozzle-agent` | `amir20/dozzle:latest` (`agent`) | Reports this stack's containers to the central Dozzle hub over mTLS gRPC on :7007. Managed by watchtower. |
-| `dns-watchtower` | `containrrr/watchtower:latest-ce` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. |
+| `dns-watchtower` | `containrrr/watchtower:latest` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. |
 
 ## Data
 

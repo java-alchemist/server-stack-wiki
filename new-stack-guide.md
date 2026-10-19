@@ -103,7 +103,7 @@ services:
 
   # ── Watchtower: auto-updates labeled services hourly ──
   watchtower:
-    image: containrrr/watchtower:latest-ce
+    image: containrrr/watchtower:latest
     container_name: <stack>-watchtower
     environment:
       WATCHTOWER_LABEL_ENABLE: "true"
@@ -226,7 +226,7 @@ Owns Tailscale node **`<app>`** — UI at `https://<app>.<tailnet>.ts.net`.
 | `<stack>-tailscale` | ... | userspace tailscaled + SERVE (:443 → app, raw TCP :7007 → agent). Not managed by watchtower. |
 | `<stack>-app` | ... | the main service; config as bind mounts, ... Managed by watchtower. |
 | `<stack>-dozzle-agent` | amir20/dozzle:latest (`agent`) | reports containers to central Dozzle hub over mTLS gRPC on :7007. Managed by watchtower. |
-| `<stack>-watchtower` | containrrr/watchtower:latest-ce | auto-updates labeled services hourly with rolling restart and rollback. |
+| `<stack>-watchtower` | containrrr/watchtower:latest | auto-updates labeled services hourly with rolling restart and rollback. |
 
 ## Secrets layout
 

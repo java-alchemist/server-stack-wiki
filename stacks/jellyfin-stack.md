@@ -13,7 +13,7 @@ Self-hosted media streaming server. Handles video/audio playback with VA-API har
 | `jellyfin-tailscale` | `tailscale/tailscale:latest` | Userspace tailscaled + SERVE (:443 → jellyfin app, raw TCP :7007 → dozzle-agent). Not managed by watchtower (no label — handles its own upgrades). |
 | `jellyfin-app` | `linuxserver/jellyfin:latest` (tag from `.env`) | The media server. Config/playlists are bind mounts (`./jellyfin/config/`, `./playlists/`). Libraries from `/mnt/samba_storage/jellyfin` (read-only). VA-API transcoding via render node device passthrough. Managed by watchtower. |
 | `jellyfin-dozzle-agent` | `amir20/dozzle:latest` (`agent`) | Reports this stack's containers to the central Dozzle hub over mTLS gRPC on :7007. Managed by watchtower. |
-| `jellyfin-watchtower` | `containrrr/watchtower:latest-ce` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. |
+| `jellyfin-watchtower` | `containrrr/watchtower:latest` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. |
 
 No host ports — everything is exposed through Tailscale SERVE only.
 

@@ -15,7 +15,7 @@ Self-hosted Google Photos alternative — photo/video library with metadata extr
 | `immich-redis` | `valkey/valkey:9-alpine` | Cache/session store for Immich. Ephemeral — data is rebuilt from the database on restart. Healthcheck: `redis-cli ping`. Managed by watchtower (floated tag). |
 | `immich-postgres` | `ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:...` (digest-pinned) | PostgreSQL 14 with pgvector extension for ML features. Data in named volume `immich_pgdata` on local disk. Password via file mount (`POSTGRES_PASSWORD_FILE`). `--data-checksums` enabled for data integrity. NOT managed by watchtower — digest must be updated in lockstep with the app via `make upgrade-db`. |
 | `immich-dozzle-agent` | `amir20/dozzle:latest` (`agent`) | Reports this stack's containers to the central Dozzle hub over mTLS gRPC on :7007. Managed by watchtower. |
-| `immich-watchtower` | `containrrr/watchtower:latest-ce` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. Does NOT touch postgres or tailscale. |
+| `immich-watchtower` | `containrrr/watchtower:latest` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. Does NOT touch postgres or tailscale. |
 
 No host ports — everything is exposed through Tailscale SERVE only.
 
