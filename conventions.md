@@ -4,7 +4,7 @@ Shared patterns enforced across all container stacks in the fleet. Every new sta
 
 ## 1. One Repo Per App (Fleet Convention)
 
-Each service gets its own git repo, its own system user, and its own Tailscale node identity. No multi-app stacks like the deprecated `media-stack`.
+Each service gets its own git repo, its own system user, and its own Tailscale node identity. No multi-app stacks like the deprecated `media-stack`. All containers run on **rootless Podman** (not rootful Docker).
 
 **Rationale:** Blast radius isolation. A container escape from Jellyfin lands on the unprivileged `jellyfin` user, not your admin account or another service's runtime state. Rootless Podman already isolates in a user namespace — stacking a dedicated system user on top of that is defense in depth.
 
@@ -197,14 +197,63 @@ The setup script is called by Makefile targets and supports these subcommands:
 
 **PUID and GUID stay at 0.** In rootless mode, container uid 0 maps to the host user running podman (the stack's system account). Do NOT set `PUID=1000` — it breaks bind-mount ownership because the container writes files as a UID that doesn't exist on the host.
 
-## 10. Data Placement
+## 10. Watchtower Auto-Update
+
+Every stack runs a watchtower container that monitors its services hourly and auto-updates containers with floating tags (`latest`, `release`, `9-alpine`). It rolls back automatically if a recreated container fails its healthcheck within the grace period.
+
+Check what was updated:
+```bash
+make logs SERVICE=watchtower   # see updates, rollbacks, or skips
+```
+
+**Not managed by watchtower:** Tailscale sidecars (no label — they handle their own upgrades) and immich postgres (digest-pinned — DB must be upgraded manually in lockstep with the app). Everything else updates automatically.
+
+## 11. Upgrade Process
+
+### Automatic (watchtower)
+
+No action needed for most services. Watchtower detects new images, pulls them, recreates containers one at a time (`ROLLING_RESTART`), and rolls back on healthcheck failure. Monitor via `make logs SERVICE=watchtower`.
+
+### Manual — Immich with Database Migration
+
+When an Immich release requires a PostgreSQL schema change:
+
+1. Check the [Immich changelog](https://github.com/immich-app/immich/releases) for DB migration notes
+2. If needed, update the postgres digest pin in `podman-compose.yml` to match what the new Immich version requires
+3. Commit and push:
+   ```bash
+   git add podman-compose.yml && git commit -m "bump postgres digest for immich vX.Y.Z" && git push
+   ```
+4. Pull on the server and recreate:
+   ```bash
+   cd /opt/data/<path>/immich-stack && git pull && make upgrade
+   ```
+
+Immich-server is already on the latest version (watchtower kept it there). The `make upgrade` just updates postgres to match, then restarts all services.
+
+### Manual — Any Other Stack Change
+
+```bash
+# Work locally
+cd /opt/data/<path>/<stack>-stack
+<edit compose or other files>
+git add -A && git commit -m "<message>" && git push
+
+# Pull on the target server
+ssh <host>
+cd /opt/data/<path>/<stack>-stack && git pull
+make upgrade        # recreate containers with new config (preserves state volumes)
+make serve          # re-apply SERVE routes if networking changed
+```
+
+## 12. Data Placement
 
 - **Databases** → named Podman volumes on local disk (heavy fsync + file-locking; network shares handle this poorly)
 - **Media/photos** → bind mounts to external storage (e.g., `/mnt/samba_storage/`) where data logically lives with other files
 - **App config** → bind mounts in the repo (`./<app>/config/`) so `make migrate` can seed it before first start and changes are version-controlled
 - **Tailscale state** → bind mount to `./ts_state/` (node identity survives container recreation)
 
-## 11. Git / GitHub Workflow for Agents
+## 13. Git / GitHub Workflow for Agents
 
 Stack repos live on GitHub (`java-alchemist/<stack>-stack`). The workflow is:
 
