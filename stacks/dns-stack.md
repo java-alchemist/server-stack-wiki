@@ -74,7 +74,7 @@ make serve   # restarts tailscale sidecar; re-applies serve.json for :7007 → d
 
 Rootless Podman can't bind below port 1024, so Pi-hole is published on `127.0.0.1:5053` (loopback only). A host-side dnsmasq forwarder bridges standard port 53 → the loopback port for LAN access.
 
-**Setup:** `make setup` automatically installs and configures dnsmasq via the `_bootstrap` phase if not already present. The forwarder listens on `127.0.0.1` and the LAN interface IP, forwarding all queries to Pi-hole at `127.0.0.1:5053`.
+**Setup:** `make setup` automatically installs and configures dnsmasq via the `_bootstrap` phase if not already present. The forwarder listens on `127.0.0.1` and the LAN interface IP, forwarding all queries to Pi-hole at `127.0.0.1:5053`. It also disables systemd-resolved's DNS stub listener (`DNSStubListener=no`) which otherwise conflicts with dnsmasq on port 53 (systemd-resolved holds `127.0.0.53:53`, and the dnsmasq systemd wrapper adds `--local-service` which binds all of `127.0.0.0/8`).
 
 **Unifi configuration:** In Unifi Controller → Settings → Networks → [LAN] → DHCP Server:
 - **DNS 1:** `192.168.1.82` (Pi-hole via forwarder — primary)

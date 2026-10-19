@@ -84,7 +84,7 @@ In Unifi Controller → Settings → Networks → [your network] → DHCP Server
 
 | Concern | Mitigation |
 |---------|-----------|
-| dnsmasq conflicts with systemd-resolved | `systemd-resolved` listens on `127.0.0.53` — no conflict as long as dnsmasq doesn't also bind there. Config uses explicit `listen-address`. |
+| dnsmasq conflicts with systemd-resolved | Handled automatically — setup.sh disables `DNSStubListener` in `/etc/systemd/resolved.conf`. The conflict occurs because dnsmasq's systemd wrapper adds `--local-service` (binds all of `127.0.0.0/8`) which overlaps with systemd-resolved's stub listener on `127.0.0.53:53`. |
 | Pi-hole down → all DNS fails | Handled at the Unifi level — set DNS 2 to `1.1.1.1` (Cloudflare) as backup. Clients fall back automatically if Pi-hole doesn't respond. No fallback needed in dnsmasq config. |
 | Host firewall blocks :53 on LAN interface | Ensure UFW/iptables allows UDP+TCP 53 on the LAN interface (`eno1`). Most home setups don't have host firewalls enabled, but worth verifying. |
 | Tailscale MagicDNS still works? | Yes — Tailscale routes DNS through its own resolver chain regardless of what's on port 53. Pi-hole is reachable via tailnet IP:5053 or the container bridge network. |
