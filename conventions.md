@@ -87,7 +87,7 @@ Each stack declares its shared dependencies in a `shared-deps` file (one relativ
 Every stack includes a tailscale sidecar:
 ```yaml
 tailscale:
-  image: tailscale/tailscale:v1.102.5   # pinned version
+  image: tailscale/tailscale:latest   # floating tag — managed by watchtower (no label, but conservative releases)
   container_name: <stack>-tailscale
   environment:
     TS_AUTH_KEY_FILE: /run/secrets/tailscale_authkey
