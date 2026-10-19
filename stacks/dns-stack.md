@@ -38,15 +38,25 @@ The DNS stack provides two core infrastructure services:
 
 ## SERVE Config
 
+Routes Pi-hole admin UI via Tailscale HTTPS. Caddy still handles `.home.arpa` routes on host ports 8443/8080 for LAN access — they don't go through SERVE.
+
 ```json
 {
   "TCP": {
     "7007": { "TCPForward": "dns-dozzle-agent:7007" }
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:443": {
+      "Handlers": {
+        "/admin/": { "Proxy": "http://pihole:80/admin/" }
+      }
+    }
   }
 }
 ```
 
-No HTTPS routes via SERVE — Caddy handles all web traffic on host ports `8443`/`8080`. Only the dozzle-agent raw TCP forward is needed.
+- `https://dns.<tailnet>.ts.net/admin/` → Pi-hole admin UI (via Tailscale SERVE)
+- Port :7007 → dozzle-agent (raw TCP for mTLS gRPC log collection)
 
 ## Pi-hole v6 Notes
 
