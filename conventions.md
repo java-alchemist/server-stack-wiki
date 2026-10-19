@@ -43,14 +43,19 @@ Every stack runs as its **own dedicated system user** (e.g., `jellyfin`, `immich
 | Repo management | Operator (`bfrey`) + stack user, both in group `server-stack` | You can `git pull` and edit files without sudo |
 | Autostart | systemd unit (`User=<stack>`) | Survives reboots, no manual `make up` needed |
 
-The operator account is added to a shared `server-stack` group for repo-level read/write access. The stack user owns runtime state (secrets, ts_state, podman named volumes).
+The operator account belongs to two groups per stack:
+
+- `server-stack` (shared) — repo-level read/write across all stacks (`git pull`, editing tracked files)
+- `<stack>` (per-stack) — read access to that stack's secrets: `.env` is `${STACK_USER}:<stack-group>` mode **640**, and `secrets/` is mode **750**
+
+So the owner can read their own stack's config without sudo, while other users stay locked out. `setup.sh` adds both memberships idempotently (and appends a default `TAILNET_DOMAIN` to `.env` if missing).
 
 ## 4. Secrets Management
 
 **All credentials are files under `secrets/` — never environment variables in `.env`.**
 
 ```
-secrets/                          # mode 700, owned by <stack>:<stack>
+secrets/                          # mode 750, owned by <stack>:<stack-group> (operator reads via group)
 ├── .tailscale-authkey            # Tailscale machine auth key (reusable)
 ├── .dozzle-cert.pem              # Shared mTLS cert (from /opt/data/stack-env/)
 ├── .dozzle-key.pem               # Shared mTLS key (from /opt/data/stack-env/)
@@ -84,33 +89,54 @@ Each stack declares its shared dependencies in a `shared-deps` file (one relativ
 
 ### Tailscale Sidecar Container
 
-Every stack includes a tailscale sidecar:
+Every stack includes a tailscale sidecar. **Standard env block** — all values come from `.env`; there are no per-stack cert variables:
+
 ```yaml
 tailscale:
-  image: tailscale/tailscale:latest   # floating tag — managed by watchtower (no label, but conservative releases)
+  image: docker.io/tailscale/tailscale:latest   # floating tag — watchtower-managed, conservative releases
   container_name: <stack>-tailscale
   environment:
-    TS_AUTH_KEY_FILE: /run/secrets/tailscale_authkey
-    TS_HOSTNAME: <app>                   # e.g., jellyfin, immich
-    TS_STATE_FILENAME: state.soc
-    TS_SERVE_CONFIG: /etc/tailscale/serve.json
+    - TS_USERSPACE="true"                        # rootless podman → userspace networking (required)
+    - TS_STATE_DIR=/var/lib/tailscale
+    - TS_HOSTNAME=${TS_HOSTNAME:-<app>}          # node name on the tailnet
+    # Cert domain is always <node>.<tailnet-domain> — computed here, never stored separately.
+    - TS_CERT_DOMAIN=${TS_HOSTNAME}.${TAILNET_DOMAIN}
+    - TS_KNOWN_PROXIES=auto
+    - TS_SERVE_CONFIG=/config/serve.json         # containerboot expands ${TS_CERT_DOMAIN} inside it
+  entrypoint: ["/bin/sh", "-c"]
+  command: ["export TS_AUTHKEY=$(cat /run/secrets/tailscale_authkey) TS_AUTH_KEY=$(cat /run/secrets/tailscale_authkey); exec /usr/local/bin/containerboot"]
   volumes:
-    - ./ts_state:/var/lib/tailscale       # persistent node identity
+    - ./ts_state/:/var/lib/tailscale/            # persistent node identity (one per stack — never shared)
     - ./secrets/.tailscale-authkey:/run/secrets/tailscale_authkey:ro
-    - ./serve-config/serve.json:/etc/tailscale/serve.json:ro
+    - ./serve-config/serve.json:/config/serve.json:ro
+  restart: unless-stopped
 ```
+
+**Cert domain standard:** `TS_CERT_DOMAIN` is always computed in compose as `${TS_HOSTNAME}.${TAILNET_DOMAIN}`. Do NOT add per-stack variables like `<APP>_TS_CERT_DOMAIN` to `.env` — the value is a pure function of the two node-identity vars, and storing it a third time just drifts. (This exact bug took down dns-stack's SERVE routes: compose never set `TS_CERT_DOMAIN`, so `${TS_CERT_DOMAIN}` in serve.json expanded empty and no HTTPS route was ever applied.) `.env` must contain both `TS_HOSTNAME=<app>` and `TAILNET_DOMAIN=<tailnet>.ts.net`; `setup.sh` appends a default `TAILNET_DOMAIN` if missing.
 
 ### SERVE Config
 
-`serve-config/serve.json` routes HTTPS and raw TCP through the tailscale sidecar:
+`serve-config/serve.json` routes HTTPS and raw TCP through the sidecar. Web keys **must** use `${TS_CERT_DOMAIN}` — containerboot expands it from container env at every boot; literal wildcards fail cert provisioning:
+
 ```json
 {
-  "443": { "httpsHandle": "app" },
-  "7007": { "tcpHandle": "dozzle-agent" }
+  "TCP": {
+    "7007": { "TCPForward": "<stack>-dozzle-agent:7007" }
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:443": {
+      "Handlers": {
+        "/": { "Proxy": "http://<app>:<INTERNAL_PORT>" }
+      }
+    }
+  }
 }
 ```
 
-Port `:443` → app container (HTTPS). Port `:7007` → dozzle-agent (mTLS gRPC for log collection).
+- `${TS_CERT_DOMAIN}:443` → app container (HTTPS, Tailscale-managed cert)
+- `:7007` → dozzle-agent (raw TCP for mTLS gRPC log collection — userspace tailscaled only delivers traffic it forwards; without the TCP section, dials to `<node>.ts.net:7007` hit a dead end)
+
+**Re-applying after changes:** containerboot unsets previous config and re-applies `TS_SERVE_CONFIG` at every boot, so `make serve` (restarts the sidecar) is the re-apply mechanism. Env-var changes require container *recreation* (`make down && make up`), not just a restart.
 
 ## 6. Dozzle Integration
 
