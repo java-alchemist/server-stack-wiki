@@ -14,7 +14,7 @@ The DNS stack provides two core infrastructure services:
 | Container | Image | Role |
 |---|---|---|
 | `dns-tailscale` | `tailscale/tailscale:latest` | Userspace tailscaled + SERVE (raw TCP :7007 → dozzle-agent). No HTTPS routes — Caddy handles that. Not managed by watchtower (no label). |
-| `dns-pihole` | `pihole/pihole:latest` | DNS resolver, ad/tracker blocking, custom local records via dnsmasq config in `./pihole/dnsmasq.d/`. Listens on host port 5053 (UDP+TCP) loopback only. Managed by watchtower. |
+| `dns-pihole` | `pihole/pihole:latest` | DNS resolver, ad/tracker blocking, custom local records via dnsmasq config in `./pihole/dnsmasq.d/`. Published on `127.0.0.1:5053` (loopback). Managed by watchtower. A host-side dnsmasq forwarder bridges LAN port 53 → loopback :5053 for LAN clients and Unifi controller access. |
 | `dns-caddy` | `caddy:2-alpine` | HTTPS reverse proxy. Routes by hostname per `./caddy/Caddyfile`. Host ports `8443:443`, `8080:80`. Let's Encrypt cert storage in named volumes. Managed by watchtower. |
 | `dns-dozzle-agent` | `amir20/dozzle:latest` (`agent`) | Reports this stack's containers to the central Dozzle hub over mTLS gRPC on :7007. Managed by watchtower. |
 | `dns-watchtower` | `containrrr/watchtower:latest-ce` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. |
@@ -69,3 +69,15 @@ make serve   # restarts tailscale sidecar; re-applies serve.json for :7007 → d
 - Pi-hole DNS healthcheck uses `dig +short +norecurse @127.0.0.1 pi.hole` — if this fails, FTL isn't running or the named volume is stale from a v5 migration.
 - Caddy binds on high ports (8443/8080) because rootless Podman can't bind below 1024. Clients reach via `https://<dns-node-ip>:8443`.
 - No host port for DNS on the tailnet — clients reach Pi-hole via Tailscale node IP :53 (Tailscale MagicDNS routes to the right machine).
+
+## LAN DNS Access (dnsmasq Forwarder)
+
+Rootless Podman can't bind below port 1024, so Pi-hole is published on `127.0.0.1:5053` (loopback only). A host-side dnsmasq forwarder bridges standard port 53 → the loopback port for LAN access.
+
+**Setup:** `make setup` automatically installs and configures dnsmasq via the `_bootstrap` phase if not already present. The forwarder listens on `127.0.0.1` and the LAN interface IP, forwarding all queries to Pi-hole at `127.0.0.1:5053`.
+
+**Unifi configuration:** In Unifi Controller → Settings → Networks → [LAN] → DHCP Server:
+- **DNS 1:** `192.168.1.82` (Pi-hole via forwarder — primary)
+- **DNS 2:** `1.1.1.1` (Cloudflare — fallback if Pi-hole is down)
+
+**Teardown:** Removes the dnsmasq forwarder config and disables the service, but prompts before removing the dnsmasq package itself (other services may depend on it).
