@@ -216,20 +216,22 @@ No action needed for most services. Watchtower detects new images, pulls them, r
 
 ### Manual — Immich with Database Migration
 
-When an Immich release requires a PostgreSQL schema change:
+Use the `upgrade-db` target to automatically check if a postgres bump is needed and apply it:
 
-1. Check the [Immich changelog](https://github.com/immich-app/immich/releases) for DB migration notes
-2. If needed, update the postgres digest pin in `podman-compose.yml` to match what the new Immich version requires
-3. Commit and push:
-   ```bash
-   git add podman-compose.yml && git commit -m "bump postgres digest for immich vX.Y.Z" && git push
-   ```
-4. Pull on the server and recreate:
-   ```bash
-   cd /opt/data/<path>/immich-stack && git pull && make upgrade
-   ```
+```bash
+make upgrade-db   # checks latest immich release → looks up required postgres digest → updates compose via worktree + push → pulls back → runs make upgrade
+```
 
-Immich-server is already on the latest version (watchtower kept it there). The `make upgrade` just updates postgres to match, then restarts all services.
+The target reads `.postgres-compat` (a version-to-digest mapping file in the repo) to know which postgres image each Immich release requires. If the current digest already matches, it reports "nothing to do" and exits.
+
+If you need to add a new mapping entry manually (e.g., after checking the Immich changelog for DB migration notes):
+```bash
+# Add or update the mapping in .postgres-compat:
+echo "release|ghcr.io/immich-app/postgres:new-tag@sha256:newdigest" >> .postgres-compat
+git add .postgres-compat && git commit -m "update postgres compat for immich vX.Y.Z" && git push
+```
+
+Then run `make upgrade-db` — it will detect the mismatch, update compose, and upgrade.
 
 ### Manual — Any Other Stack Change
 
