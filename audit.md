@@ -7,8 +7,6 @@ Findings from reviewing all four active stack repos against the wiki conventions
 ### ✗ Must fix
 
 - **No README.md** — Every repo must have one with services table, secrets layout, and ops commands per convention §2
-- **`dozzle-agent` container name typo** — `dns-dozzle-agent` (double-z). Convention pattern is `<stack>-dozzle-agent`. Should be `dns-dozzle-agent` → `dns-dozzle-agent`. The SERVE config references the same misspelled name so it works, but breaks consistency
-- **No systemd autostart** — No `install-service`/`enable-service` targets in Makefile, no `systemd/` dir. Convention §3 says every stack should have an autostart unit via `User=<stack>`
 
 ### ⚠ Should fix
 
@@ -21,7 +19,6 @@ Findings from reviewing all four active stack repos against the wiki conventions
 ### ✗ Must fix
 
 - **Tailscale image unpinned** — Uses `tailscale:latest`. Same issue as dns-stack
-- **No systemd autostart** — No `install-service`/`enable-service` targets, no `systemd/` dir
 
 ### ⚠ Should fix
 
@@ -37,15 +34,9 @@ Findings from reviewing all four active stack repos against the wiki conventions
 ### ⚠ Should fix
 
 - **No systemd autostart** — No `install-service`/`enable-service` targets or `systemd/` dir
-- **Dozzle agent container name typo** — `jellyfin-dozzle-agent` (double-z). Same as dns-stack
 - **Does not explicitly create STACK_GROUP** — Sets `STACK_GROUP="jellyfin"` but does not call `groupadd`. Relies on the implicit primary group created by `useradd -m`. Teardown tries to `groupdel` it, which works because useradd creates a matching group. Works today but is fragile if someone changes the useradd flags
 
 ## immich-stack (`/opt/data/staging/immich-stack`)
-
-### ✗ Must fix
-
-- **No `shared-deps` file** — Same as jellyfin-stack
-- **Dozzle agent container name typo** — `immich-dozzle-agent` (double-z). Same across all stacks
 
 ### ⚠ Should fix
 
@@ -56,7 +47,6 @@ Findings from reviewing all four active stack repos against the wiki conventions
 
 | Issue | Affected | Convention | Severity |
 |-------|----------|------------|----------|
-| **"dozzzle" typo in all agent container names** | dns, jellyfin, immich | N/A — this is a bug carried into the convention docs. Fix both the repos and the wiki to use `dozzle-agent` consistently | ✗ |
 | **No systemd autostart units** | All 4 stacks | Convention §3: "Autostart via systemd unit (`User=<stack>`)" | ⚠ — current stacks are managed manually or by other means, but the convention says they should have it |
 | **Tailscale image unpinned** | dns-stack, dozzle-stack | Jellyfin/immich pin to `v1.102.5` with a comment about verifying versions. dns/dozzle use `:latest` which pulls silently on upgrade | ⚠ |
 | **Inconsistent STACK_GROUP naming** | dns (`dns-stack`) vs jellyfin (`jellyfin`) | Convention doesn't specify short name — should standardize to the short stack name without `-stack` suffix for consistency | Minor |
@@ -66,6 +56,5 @@ Findings from reviewing all four active stack repos against the wiki conventions
 
 The following convention text needs updating based on what the actual repos do:
 
-1. **Dozzle agent container name** — All repos spell it `dozzzle-agent` (double-z). The wiki conventions §6 show `<stack>-dozzle-agent` which is already correct spelling, but the SERVE configs and compose files all use the typo. Either fix the repos or update the convention to match reality
-2. **SERVE config format** — dns-stack uses `TCPForward` while jellyfin/immich use a mix of `HTTPS` + `Proxy` handlers. The conventions §5 example should reflect the actual pattern used (which varies by stack)
-3. **Tailscale sidecar image path** — Conventions say `tailscale/tailscale:v1.102.5` but dns/dozzle use `docker.io/tailscale/tailscale:latest`. Should standardize to pinned version with full registry prefix
+1. **SERVE config format** — dns-stack uses `TCPForward` while jellyfin/immich use a mix of `HTTPS` + `Proxy` handlers. The conventions §5 example should reflect the actual pattern used (which varies by stack)
+2. **Tailscale sidecar image path** — Conventions say `tailscale/tailscale:v1.102.5` but dns/dozzle use `docker.io/tailscale/tailscale:latest`. Should standardize to pinned version with full registry prefix
