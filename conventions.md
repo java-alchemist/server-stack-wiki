@@ -31,6 +31,8 @@ Each service gets its own git repo, its own system user, and its own Tailscale n
 └── [app-specific dirs]   # Config bind mounts, data volumes, scripts/
 ```
 
+Stack repos are lean: only what's needed to run and manage the containers. All documentation, 3rd-party API references, and vendor changelogs live in the **server-stack-wiki** repo under `docs/<stack>-name/` — kept separate so each stack repo stays focused on infrastructure code.
+
 ## 3. System User Model
 
 Every stack runs as its **own dedicated system user** (e.g., `jellyfin`, `immich`, `dns`, `dozzle`):

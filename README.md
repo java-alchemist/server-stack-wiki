@@ -27,4 +27,9 @@ Deep dives into how each stack works, its services, data layout, secrets, and go
 ## Conventions and Guides
 
 - **[conventions.md](conventions.md)** — Shared patterns every stack follows
+- **[deployment.md](deployment.md)** — How setup and teardown provision/deprovision stacks (user/group creation, ownership, sudoers, secrets)
 - **[new-stack-guide.md](new-stack-guide.md)** — Step-by-step to create a new container stack from scratch
+
+## 3rd-Party Documentation
+
+Backed-up vendor docs for each stack's services live under `docs/<stack>-name/` in this wiki repo. Stack repos themselves stay lean (compose, Makefile, setup script only).
