@@ -1,6 +1,6 @@
 # Stack Conventions
 
-Shared patterns enforced across all tva container stacks. Every new stack must follow these.
+Shared patterns enforced across all container stacks in the fleet. Every new stack must follow these.
 
 ## 1. One Repo Per App (Fleet Convention)
 
@@ -188,7 +188,7 @@ The setup script is called by Makefile targets and supports these subcommands:
 1. Generate `.env` from `.env.example`, filling in random passwords/secrets
 2. Copy shared secrets from `$STACK_ENV_DIR/` into `secrets/` (read `shared-deps` to know which ones)
 3. Create runtime directories (`ts_state/`, app config bind mount dirs, etc.)
-4. Register dozzle agent endpoint: write to `$STACK_ENV_DIR/dozzle-agents.d/<stack>` with format `<node>.tail6a7569.ts.net:7007|<name>`
+4. Register dozzle agent endpoint: write to `$STACK_ENV_DIR/dozzle-agents.d/<stack>` with format `<node>.<tailnet>.ts.net:7007|<name>`
 5. Enable user-level `podman.socket` systemd unit (so the API socket stays alive for dozzle-agent)
 
 ## 9. PUID/GUID in Rootless Mode
