@@ -10,45 +10,37 @@ Findings from reviewing all four active stack repos against the wiki conventions
 
 ### ⚠ Should fix
 
-- **Tailscale image unpinned** — Uses `tailscale:latest`. Convention pinning note (jellyfin-stack comment): "verify before bumping as Tailscale skips some patch versions." Should be a version tag like `v1.102.5`
+*(Fixed)* Tailscale image pinned to `v1.102.5` — [`ccb0ce8`](https://github.com/java-alchemist/dns-stack/commit/ccb0ce8)
 - **Stack group name includes `-stack` suffix** — `STACK_GROUP="dns-stack"` vs `dns`. Jellyfin/immich use the short name (`jellyfin`, `immich`). Inconsistent with the other two newer stacks
 - **User shell is `/usr/sbin/nologin`** — Jellyfin/immich use `/bin/bash`. Convention says "nologin" for defense-in-depth but both approaches work. If standardizing, pick one and update conventions
 
 ## dozzle-stack (`/opt/data/dozzle-stack`)
 
-### ✗ Must fix
-
-- **Tailscale image unpinned** — Uses `tailscale:latest`. Same issue as dns-stack
-
 ### ⚠ Should fix
 
+*(Fixed)* Tailscale image pinned to `v1.102.5` — [`d1d00fc`](https://github.com/java-alchemist/dozzle-stack/commit/d1d00fc)
 - **Stack group name includes `-stack` suffix** — `STACK_GROUP="dozzle-stack"` vs `dozzle`. Same inconsistency as dns-stack
 - **User shell is `/usr/sbin/nologin`** — Same discrepancy as dns-stack vs jellyfin/immich
 
 ## jellyfin-stack (`/opt/data/staging/jellyfin-stack`)
 
-### ✗ Must fix
-
-- **No `shared-deps` file** — Convention §4 requires this to declare which files are read from `$STACK_ENV_DIR/`. The setup.sh copies them anyway, but the declaration is missing so there's no manifest of what it depends on
-
 ### ⚠ Should fix
 
-- **No systemd autostart** — No `install-service`/`enable-service` targets or `systemd/` dir
-- **Does not explicitly create STACK_GROUP** — Sets `STACK_GROUP="jellyfin"` but does not call `groupadd`. Relies on the implicit primary group created by `useradd -m`. Teardown tries to `groupdel` it, which works because useradd creates a matching group. Works today but is fragile if someone changes the useradd flags
+*(Fixed)* Systemd autostart added (`install-service`/`enable-service` targets + `systemd/jellyfin-stack.service`) — [`e6facd5`](https://github.com/java-alchemist/jellyfin-stack/commit/e6facd5)
+*(Fixed)* STACK_GROUP explicitly created via `groupadd` in bootstrap — same commit
 
 ## immich-stack (`/opt/data/staging/immich-stack`)
 
 ### ⚠ Should fix
 
-- **No systemd autostart** — No `install-service`/`enable-service` targets or `systemd/` dir
-- **Does not explicitly create STACK_GROUP** — Same as jellyfin-stack (relies on implicit primary group)
+*(Fixed)* Systemd autostart added — [`effa359`](https://github.com/java-alchemist/immich-stack/commit/effa359)
+*(Fixed)* STACK_GROUP explicitly created via `groupadd` in bootstrap — same commit
 
 ## Cross-Cutting Issues
 
-| Issue | Affected | Convention | Severity |
-|-------|----------|------------|----------|
-| **No systemd autostart units** | All 4 stacks | Convention §3: "Autostart via systemd unit (`User=<stack>`)" | ⚠ — current stacks are managed manually or by other means, but the convention says they should have it |
-| **Tailscale image unpinned** | dns-stack, dozzle-stack | Jellyfin/immich pin to `v1.102.5` with a comment about verifying versions. dns/dozzle use `:latest` which pulls silently on upgrade | ⚠ |
+| Issue | Affected | Convention | Status |
+|-------|----------|------------|--------|
+| **Tailscale image unpinned** | dns-stack, dozzle-stack | Jellyfin/immich pin to `v1.102.5` | ✅ Fixed in both repos |
 | **Inconsistent STACK_GROUP naming** | dns (`dns-stack`) vs jellyfin (`jellyfin`) | Convention doesn't specify short name — should standardize to the short stack name without `-stack` suffix for consistency | Minor |
 | **Inconsistent user shell** | dns/dozzle: `/usr/sbin/nologin` vs jellyfin/immich: `/bin/bash` | Convention says "nologin" in §3 table but two stacks use bash. Should pick one and document it | Minor |
 
