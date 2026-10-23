@@ -79,3 +79,31 @@ Services without explicit healthchecks in compose rely on the image's built-in H
 - Tailscale sidecars are excluded from watchtower because they manage their own node identity (state.soc) and SERVE config. Auto-recreating them is harmless but unnecessary — the tailscale image handles upgrades gracefully on its own via `make upgrade`.
 - Dozzle-agent: included in watchtower updates since it's just a log collector with no state.
 - Watchtower itself gets the label too, so it self-updates (standard practice).
+
+## Known Issue — podman 4.9 + cgroupv2 breaks auto-update (found 2026-10-19)
+
+Watchtower recreates containers via the API, copying the old container's HostConfig
+(including `MemorySwappiness`). Podman bakes that into the OCI spec and crun fails:
+
+```
+Error response from daemon: crun: cannot set memory swappiness with cgroupv2: OCI runtime error
+```
+
+The damage is one-way: watchtower has already SIGTERM'd and removed the running
+container, so the service is left **created but never started**. Worse, watchtower
+only scans *running* labeled containers (hourly `Session done Scanned=N` count drops
+as things die), so it **never retries** — the outage persists until a manual recreate.
+
+Incident: on tva 2026-10-19, hourly updates killed `jellyfin-app` (new ls55 image)
+and `jellyfin-dozzle-agent` (v11.3.3); both stayed down for days while the tailscale
+sidecar and watchtower itself ran fine. Recovery: `make upgrade` in the stack dir
+(plain `podman start` does NOT work — the bad field is baked into the saved spec).
+
+Mitigations until podman/crun is fixed upstream (unverified as of 2026-10-23):
+- Pin version tags in `.env` instead of floating `latest` — watchtower only acts when
+  the pinned tag's digest changes.
+- Drop the label from low-value services (e.g. dozzle-agent).
+- Compose-level healthchecks do NOT help here: start fails before any healthcheck runs,
+  so there is nothing for rollback to act on.
+
+All stacks with watchtower are exposed (dns pihole/caddy, dozzle hub, immich-server/redis).
