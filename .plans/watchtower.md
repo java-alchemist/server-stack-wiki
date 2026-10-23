@@ -99,11 +99,34 @@ and `jellyfin-dozzle-agent` (v11.3.3); both stayed down for days while the tails
 sidecar and watchtower itself ran fine. Recovery: `make upgrade` in the stack dir
 (plain `podman start` does NOT work — the bad field is baked into the saved spec).
 
-Mitigations until podman/crun is fixed upstream (unverified as of 2026-10-23):
+Mitigations until podman/crun is fixed upstream:
 - Pin version tags in `.env` instead of floating `latest` — watchtower only acts when
-  the pinned tag's digest changes.
+  the pinned tag's digest changes (delays, doesn't prevent).
 - Drop the label from low-value services (e.g. dozzle-agent).
 - Compose-level healthchecks do NOT help here: start fails before any healthcheck runs,
   so there is nothing for rollback to act on.
+
+Fix status (verified 2026-10-23):
+- **No crun release fixes this.** Current crun main still errors by design when the OCI
+  spec carries a swappiness field under cgroup v2 (`src/libcrun/cgroup-resources.c`:
+  `swappiness_present && cgroup2 → error`). Cgroup v2 has no per-cgroup swappiness knob,
+  so ignoring the field loses nothing (Docker ignores it on v2 too).
+- **Podman ≥5.0 fixes it** (guard present since v5.0.0 in
+  `pkg/api/handlers/compat/containers_create.go`: rootless + cgroupv2 + non-systemd
+  manager → swappiness is not written to the spec at all). Ubuntu 24.04 ships only
+  podman 4.9.x, so this means a source build.
+
+Two remediation paths for tva:
+1. **Surgical (recommended first):** patch crun 1.14.1's swappiness block to skip
+   instead of error under cgroup v2, rebuild, install the binary. Works with existing
+   podman 4.9.3; fully reversible (remove the binary). Re-apply if Ubuntu ever updates
+   crun via apt.
+2. **Proper:** upgrade podman to ≥5.0 (source build on 24.04) — fixes this for all
+   API-based recreators fleet-wide, but touches the core runtime of every stack.
+
+Verification canary after either fix: `podman run --rm --memory 1g --memory-swappiness 0
+alpine true` must succeed (before the fix it exits 126 with the crun error). Then force
+one real watchtower cycle by retagging an older local image as `latest`, and confirm in
+the journal that the recreate succeeds.
 
 All stacks with watchtower are exposed (dns pihole/caddy, dozzle hub, immich-server/redis).
