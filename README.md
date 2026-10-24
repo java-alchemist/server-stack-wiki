@@ -12,6 +12,7 @@ The conventions below apply to any host running this fleet pattern. The table sh
 | Dozzle | `dozzle-stack` | `/opt/data/dozzle-stack` | `dozzle` | `dozzle` | Central log viewer hub |
 | Jellyfin | `jellyfin-stack` | `/opt/data/jellyfin-stack` | `jellyfin` | `jellyfin` | Media streaming server |
 | Immich | `immich-stack` | `/opt/data/immich-stack` | `immich` | `immich` | Self-hosted photo library |
+| Synapse | `synapse-stack` | `/opt/data/synapse-stack` | `synapse` | `synapse` | Matrix homeserver + Element Web (chat/federation) |
 
 All repos live under `java-alchemist` on GitHub. No host ports — everything is tailnet-only via Tailscale SERVE.
 
@@ -23,6 +24,7 @@ Deep dives into how each stack works, its services, data layout, secrets, and go
 - **[dozzle-stack](stacks/dozzle-stack.md)** — Central container log viewer hub (mTLS gRPC)
 - **[jellyfin-stack](stacks/jellyfin-stack.md)** — Media streaming server with VA-API transcoding
 - **[immich-stack](stacks/immich-stack.md)** — Self-hosted photo library (PostgreSQL + Valkey)
+- **[synapse-stack](stacks/synapse-stack.md)** — Matrix homeserver (Synapse) + Element Web, federation over SERVE :8448
 
 ## Conventions and Guides
 
