@@ -75,9 +75,13 @@ podman exec synapse-app register_new_matrix_user \
     --server-baseurl http://localhost:8008 -c /data/homeserver.yaml \
     -u <user> -p '<pass>'            # add -a for admin
 
-# Health probe (image is python-based, no curl):
-podman exec synapse-app python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8008/health')"
+# Health probe (image ships curl):
+podman exec synapse-app curl -f http://localhost:8008/health
 ```
+
+- The image entrypoint drops to uid 991 when run as container root — compose sets
+  `UID=0 GID=0` so it stays container-root, which under rootless podman maps to the
+  host stack user. Do not remove those env vars or data-dir ownership breaks.
 
 - `trusted_key_servers: []` — federation keys fetched directly from peers (no
   public key server trust). Add `matrix.org` in the template for public-network interop.
