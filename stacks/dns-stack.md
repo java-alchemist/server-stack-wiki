@@ -43,6 +43,7 @@ Routes Pi-hole admin UI via Tailscale HTTPS. Caddy still handles `.home.arpa` ro
 ```json
 {
   "TCP": {
+    "443": { "HTTPS": true },
     "7007": { "TCPForward": "dns-dozzle-agent:7007" }
   },
   "Web": {
