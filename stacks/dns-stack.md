@@ -68,7 +68,7 @@ Routes Pi-hole admin UI via Tailscale HTTPS. Caddy still handles `.home.arpa` ro
 
 ## Operations
 
-Standard Makefile targets apply (`make setup`, `up`, `down`, `restart`, `upgrade`, `serve`, `status`, `logs`, `validate`, `teardown`).
+Standard Makefile targets apply (`make setup`, `up`, `down`, `restart`, `upgrade`, `serve`, `status`, `logs`, `validate`, `teardown`). `make rotate-pw` generates a new random web password (same format as setup), writes it to `secrets/.pihole_password`, restarts only `dns-pihole`, and prints the new value once.
 
 ### Re-apply SERVE routes
 
