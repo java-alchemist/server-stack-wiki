@@ -49,7 +49,7 @@ Routes Pi-hole admin UI via Tailscale HTTPS. Caddy still handles `.home.arpa` ro
   "Web": {
     "${TS_CERT_DOMAIN}:443": {
       "Handlers": {
-        "/admin/": { "Proxy": "http://pihole:80/admin/" }
+        "/": { "Proxy": "http://pihole:80" }
       }
     }
   }
@@ -57,6 +57,7 @@ Routes Pi-hole admin UI via Tailscale HTTPS. Caddy still handles `.home.arpa` ro
 ```
 
 - `https://dns.<tailnet>.ts.net/admin/` → Pi-hole admin UI (via Tailscale SERVE)
+- The handler MUST be `/`, not just `/admin/`: the web UI lives under `/admin/` but its API is at root-level `/api/*` — a `/admin/-only` proxy loads the login page, then every `POST /api/auth` 404s and the UI shows "Server unreachable!"
 - Port :7007 → dozzle-agent (raw TCP for mTLS gRPC log collection)
 
 ## Pi-hole v6 Notes
