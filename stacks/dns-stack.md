@@ -14,7 +14,7 @@ The DNS stack provides two core infrastructure services:
 | Container | Image | Role |
 |---|---|---|
 | `dns-tailscale` | `tailscale/tailscale:latest` | Userspace tailscaled + SERVE (raw TCP :7007 → dozzle-agent). No HTTPS routes — Caddy handles that. Not managed by watchtower (no label). |
-| `dns-pihole` | `pihole/pihole:latest` | DNS resolver, ad/tracker blocking. Published on `127.0.0.1:5053` (loopback) for DNS and `${PIHOLE_WEB_PORT:-10053}:80` (LAN-reachable) for the admin UI. Managed by watchtower. A host-side dnsmasq forwarder bridges LAN port 53 → loopback :5053 for LAN clients and Unifi controller access. |
+| `dns-pihole` | `pihole/pihole:latest` | DNS resolver, ad/tracker blocking. Published on `127.0.0.1:5053` (loopback) for DNS and `127.0.0.1:${PIHOLE_WEB_PORT:-10053}:80` (loopback escape hatch) — admin UI is tailnet-only via SERVE. Managed by watchtower. A host-side dnsmasq forwarder bridges LAN port 53 → loopback :5053 for LAN clients and Unifi controller access. |
 | `dns-caddy` | `caddy:2-alpine` | HTTPS reverse proxy. Routes by hostname per `./caddy/Caddyfile`. Host ports `8443:443`, `8080:80`. Let's Encrypt cert storage in named volumes. Managed by watchtower. |
 | `dns-dozzle-agent` | `amir20/dozzle:latest` (`agent`) | Reports this stack's containers to the central Dozzle hub over mTLS gRPC on :7007. Managed by watchtower. |
 | `dns-watchtower` | `containrrr/watchtower:latest` | Auto-updates labeled services hourly with rolling restart and rollback on healthcheck failure. Polls every 3600s. |
@@ -94,11 +94,11 @@ Rootless Podman can't bind below port 1024, so Pi-hole is published on `127.0.0.
 
 **Teardown:** Removes the dnsmasq forwarder config and disables the service, but prompts before removing the dnsmasq package itself (other services may depend on it).
 
-## LAN Web UI Access
+## Admin UI Access
 
-The admin UI is published directly on a high port (`${PIHOLE_WEB_PORT:-10053}:80`) — no Caddy route, no cert, works fully offline:
+The admin UI is **tailnet-only** by design — nothing on the LAN can reach it:
 
-- **LAN:** `http://<tva-lan-ip>:10053/admin/` (e.g. `http://192.168.1.82:10053/admin/`)
 - **Tailnet:** `https://dns.<tailnet>.ts.net/admin/` (via Tailscale SERVE)
+- **tva host only:** `http://127.0.0.1:${PIHOLE_WEB_PORT:-10053}/admin/` — loopback escape hatch for when the tailnet is unavailable
 
-The Caddy `.home.arpa` route is NOT the LAN path for Pi-hole: Let's Encrypt can't issue certs for non-public domains, and on v6 the legacy `/etc/dnsmasq.d/` bind mount is inert (local records belong in `pihole.toml`). If a FQDN + HTTPS-on-LAN is ever wanted, use Caddy with `tls internal` plus an FTL local record — at the cost of trusting the private CA on every device.
+The web port is deliberately bound to `127.0.0.1`, not published to the LAN. (The Caddy `.home.arpa` route was considered and rejected: Let's Encrypt can't issue certs for non-public domains, on v6 the legacy `/etc/dnsmasq.d/` bind mount is inert — local records belong in `pihole.toml` — and a private CA would need trusting on every device.)
