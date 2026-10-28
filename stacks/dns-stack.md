@@ -81,6 +81,7 @@ make serve   # restarts tailscale sidecar; re-applies serve.json for :7007 → d
 - Pi-hole DNS healthcheck uses `dig +short +norecurse @127.0.0.1 pi.hole` — if this fails, FTL isn't running or the named volume is stale from a v5 migration.
 - Caddy binds on high ports (8443/8080) because rootless Podman can't bind below 1024. Clients reach via `https://<dns-node-ip>:8443`.
 - No host port for DNS on the tailnet — clients reach Pi-hole via Tailscale node IP :53 (Tailscale MagicDNS routes to the right machine).
+- **Network backend is pasta, not slirp4netns:** slirp4netns on tva's podman 4.9 does NOT forward published UDP ports — Pi-hole's `127.0.0.1:5053/udp` publish silently dies (host socket binds, queries get no answer; TCP publishes work fine). local-setup pins `network_backend = "pasta"` in the dns user's containers.conf; after any backend change recreate the network with `make down && make up`.
 
 ## LAN DNS Access (dnsmasq Forwarder)
 
