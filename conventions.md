@@ -317,3 +317,19 @@ cd /opt/data/<path>/<stack>-stack && git status --porcelain
 Never blindly pull over a dirty tree, and never leave the host diverged from origin: after any change, `git status --porcelain` on the host must be empty.
 
 **After pulling:** run `make local-setup` if generated files depend on what changed (e.g., dns-stack rebuilds `DNS_HOSTS_RECORDS` and re-fetches `pki/root.crt`), then `make up` / `make upgrade` as needed — several stacks' `up` targets detect compose/.env drift via `.compose-hash` and force-recreate automatically.
+
+## 15. Debugging Against Upstream Documentation
+
+**Rule:** when a stack service fails at the application level (auth errors, config-load failures, crash loops), consult the project's official documentation BEFORE theorizing from symptoms — especially for how it reads secrets/config and what its reference install files do. Symptom-driven inference is slow and wrong often; upstream docs encode non-obvious operational requirements in plain text.
+
+**Read, in order:**
+1. **The reference install/compose page** — encodes the exact secret-generation steps the vendor expects (which values need `tr -d '\n'`, canonical env var names, required mounts).
+2. **The configuration reference for the specific keys in use** — loader semantics matter: e.g., authentik's `file://<path>` reads raw file bytes with no trimming, while a postgres entrypoint reading the same file via `$(cat ...)` strips trailing newlines. When two components read one secret through different loaders, check BOTH documented behaviors before touching either side.
+3. **Grep the docs for the exact error string from the logs** — troubleshooting pages often name the failure mode directly.
+
+**Case study (authentik-stack, 2026-11-03):** server/worker crash-looped with `FATAL: password authentication failed`. The setup script generated the PG password via `openssl rand -base64 36 > file` — openssl appends a trailing newline. Postgres stripped it at DB init; authentik's `file://` loader presented raw bytes → permanent mismatch, broken from day one of provisioning. The vendor's own compose-install docs show their procedure: `PG_PASS=*** rand -base64 36 | tr -d '\n')`. Reading that page settles the incident in one step; instead it took a chain of hypotheses (container user mapping, stale mounts, catalog drift) to get there.
+
+**Practical notes:**
+- Docusaurus-based docs sites serve raw markdown at `<page>.md` — mirror them for grepping: fetch `sitemap.xml`, append `.md` to each URL (skip tag/search pages), save preserving path structure. Example: authentik docs mirrored on tva at `/mnt/samba_storage/Docs/authentik/`.
+- When behavior is version-dependent, verify against the exact pinned release's docs/source, not "latest".
+
