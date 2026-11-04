@@ -11,9 +11,11 @@ Step-by-step instructions for creating a new container stack on any host in the 
 
 ## Step 1: Create the Repository
 
+**New stacks are authored in a LOCAL checkout — never on the target host.** The agent builds the whole repo locally (`/opt/data/<stack>-stack/`), commits and pushes from there; the operator then clones it onto tva (Step 9). This keeps every file reviewable in git before anything touches a server.
+
 ```bash
-# On your workstation or the target host
-mkdir /opt/data/staging/<stack>-stack && cd /opt/data/staging/<stack>-stack
+# Local checkout (agent side)
+mkdir /opt/data/<stack>-stack && cd /opt/data/<stack>-stack
 git init -b main
 ```
 
@@ -21,7 +23,7 @@ Create these files (see templates below):
 
 - `README.md` — architecture, services table, secrets layout, ops commands
 - `.env.example` — env var template with comments
-- `podman-compose.yml` — services definition (app + tailscale + dozzle-agent + watchtower)
+- `podman-compose.yml` — services definition (app + tailscale + dozzle-agent [+ watchtower])
 - `serve-config/serve.json` — Tailscale SERVE routes
 - `setup.sh` — provisioning script (bootstrap + local-setup)
 - `Makefile` — standard targets
@@ -29,12 +31,21 @@ Create these files (see templates below):
 
 When making changes to any stack, always update the **server-stack-wiki** in parallel: per-stack docs under `stacks/<stack>-name.md`, and conventions if the change affects fleet-wide patterns. The wiki is the authoritative knowledge base for how stacks work.
 
-Then push to GitHub:
+Then create the GitHub repo and push — **the agent does this end-to-end, no operator help needed** (verified 2026-11-04):
+
 ```bash
-git add -A && git commit -m "initial: <app> stack skeleton"
-gh repo create java-alchemist/<stack>-stack --public  # or --private
+# 1. Create the remote repo. WSL has NO gh CLI — use tva's authenticated one over ssh:
+ssh -o BatchMode=yes bfrey@tva 'gh repo create java-alchemist/<stack>-stack --private'
+
+# 2. Commit + push from WSL. https git credentials are pre-configured in WSL,
+#    so a plain `git push` works (no token handling):
+cd /opt/data/<stack>-stack
+git init -b main && git add -A && git commit -m "initial: <app> stack"
+git remote add origin https://github.com/java-alchemist/<stack>-stack.git
 git push -u origin main
 ```
+
+If `gh repo create` reports the repo already exists, skip straight to step 2. If the push is blocked on an approval prompt that times out (operator away), land the local commit first and hand over ONE compact pasteable block doing steps 1–2 — never retry the blocked command in a loop.
 
 ## Step 2: Write podman-compose.yml
 
@@ -265,21 +276,15 @@ make up
 
 ## Step 9: First Run
 
-Commit everything and push to GitHub, then pull it onto the target host:
+The repo is already committed and pushed from the local checkout (Step 1). The operator deploys by cloning on the target host — nothing is copied or moved manually:
 
 ```bash
-# On your workstation (or wherever you've been editing)
-cd /opt/data/staging/<stack>-stack
-git add -A && git commit -m "initial: <app> stack"
-git push
-
-# SSH to the target host and deploy
-ssh <host>
-cd /opt/data/ && mkdir -p <target-path>/ && mv staging/<stack>-stack <target-path>/<stack>-stack 2>/dev/null || true
-cd <target-path>/<stack>-stack
-make setup    # one sudo prompt for host bootstrap
-make up       # starts the stack (pulls images, applies SERVE)
-make serve    # re-apply SERVE routes if needed
+# On tva (operator)
+cd /opt/data && git clone https://github.com/java-alchemist/<stack>-stack.git
+cd <stack>-stack
+make setup    # one sudo prompt for host bootstrap, then per-stack config as the stack user
+make up       # starts the stack (pulls images; self-heals secrets first)
+make serve    # apply SERVE routes (restarts sidecar; containerboot re-applies serve.json)
 ```
 
 Verify:
