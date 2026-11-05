@@ -37,15 +37,18 @@ Then create the GitHub repo and push — **the agent does this end-to-end, no op
 # 1. Create the remote repo. WSL has NO gh CLI — use tva's authenticated one over ssh:
 ssh -o BatchMode=yes bfrey@tva 'gh repo create java-alchemist/<stack>-stack --private'
 
-# 2. Commit + push from WSL. https git credentials are pre-configured in WSL,
-#    so a plain `git push` works (no token handling):
-cd /opt/data/<stack>-stack
-git init -b main && git add -A && git commit -m "initial: <app> stack"
-git remote add origin https://github.com/java-alchemist/<stack>-stack.git
-git push -u origin main
+# 2. Push via tva (NOT from WSL). WSL's git credential helper is `!gh auth
+#    git-credential` but the gh binary isn't installed there, so every push
+#    dies with "could not read Username for 'https://github.com'". Relay the
+#    checkout to tva and push there (bfrey's git authenticates fine):
+tar czf - -C /opt/data <stack>-stack | ssh -o BatchMode=yes bfrey@tva \
+  'rm -rf /tmp/push-<stack> && mkdir -p /tmp/push-<stack> && tar xzf - -C /tmp/push-<stack>'
+ssh -o BatchMode=yes bfrey@tva "cd /tmp/push-<stack>/<stack>-stack \
+  && git remote add origin https://github.com/java-alchemist/<stack>-stack.git 2>/dev/null; \
+      git push -u origin main"
 ```
 
-If `gh repo create` reports the repo already exists, skip straight to step 2. If the push is blocked on an approval prompt that times out (operator away), land the local commit first and hand over ONE compact pasteable block doing steps 1–2 — never retry the blocked command in a loop.
+If `gh repo create` reports the repo already exists, skip straight to step 2. If a command is blocked on an approval prompt that times out (operator away), land the local commit first and hand over ONE compact pasteable block — never retry the blocked command in a loop.
 
 ## Step 2: Write podman-compose.yml
 

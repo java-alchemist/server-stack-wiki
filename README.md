@@ -10,6 +10,7 @@ The conventions below apply to any host running this fleet pattern. The table sh
 |-------|------|--------------------|------|----------------|---------|
 | DNS | `dns-stack` | `/opt/data/home/dns-stack` | `dns` | `dns` | Pi-hole + Caddy (DNS/HTTPS infra) |
 | Dozzle | `dozzle-stack` | `/opt/data/dozzle-stack` | `dozzle` | `dozzle` | Central log viewer hub |
+| Home Assistant | `ha-stack` | `/opt/data/ha-stack` | `ha` | `ha` | Smart-home hub (HA Core + ZHA Zigbee) |
 | Jellyfin | `jellyfin-stack` | `/opt/data/jellyfin-stack` | `jellyfin` | `jellyfin` | Media streaming server |
 | Immich | `immich-stack` | `/opt/data/immich-stack` | `immich` | `immich` | Self-hosted photo library |
 | Synapse | `synapse-stack` | `/opt/data/synapse-stack` | `synapse` | `synapse` | Matrix homeserver + Element Web (chat/federation) |
@@ -22,6 +23,7 @@ Deep dives into how each stack works, its services, data layout, secrets, and go
 
 - **[dns-stack](stacks/dns-stack.md)** — Pi-hole DNS resolver + Caddy HTTPS reverse proxy
 - **[dozzle-stack](stacks/dozzle-stack.md)** — Central container log viewer hub (mTLS gRPC)
+- **[ha-stack](stacks/ha-stack.md)** — Home Assistant Core + ZHA; USB device passthrough via `make add-device` convention
 - **[jellyfin-stack](stacks/jellyfin-stack.md)** — Media streaming server with VA-API transcoding
 - **[immich-stack](stacks/immich-stack.md)** — Self-hosted photo library (PostgreSQL + Valkey)
 - **[synapse-stack](stacks/synapse-stack.md)** — Matrix homeserver (Synapse) + Element Web, federation over SERVE :8448
