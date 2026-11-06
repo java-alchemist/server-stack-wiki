@@ -73,12 +73,13 @@ Host-side access for USB devices (Zigbee dongles, DVB antennas, …) is managed 
 | Container passthrough declaration | `./devices/<name>` — **gitignored**, one file per device, filename = `/dev/<name>`, content ignored | same targets (they create/remove the file), or plain `touch`/`rm` + re-render (no sudo) |
 | Container passthrough itself | `devices:` block in rendered `podman-compose.yml` (gitignored, generated from `podman-compose.template.yml`) | automatic — re-rendered by every `make local-setup` / `add-device` / `remove-device`; `make up` self-heals a missing render via `local-setup` |
 
-Example — the SONOFF Dongle Plus MG24 (Zigbee 3.0 + Thread) for ZHA:
+Example — the SONOFF Dongle Plus MG24 (Zigbee 3.0 + Thread) for ZHA. Note: it is a **Silicon Labs EFR32MG24** — in the ZHA flow pick Radio Type **`ezsp`**. Its USB ID `10C4:EA60` only identifies the CP210x bridge chip and is shared with TI CC2652P dongles (which use `znp`) — never infer the protocol from VID:PID; check the model's SoC.
 
 ```bash
 make list-devices                              # find the dongle's node (here: /dev/ttyUSB0)
 make add-device SRC=/dev/ttyUSB0 NAME=sonoff-pmg24   # udev rule + devices/ declaration + re-render, one step
 make down && make up
+make probe-device                            # verify each declared device is alive INSIDE ha-app (open OK vs ENODEV stale bind vs permission)
 # HA UI: Settings → Devices & Services → Add Integration → ZHA → port /dev/sonoff-pmg24
 ```
 

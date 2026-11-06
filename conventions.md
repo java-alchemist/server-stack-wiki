@@ -191,6 +191,14 @@ Shared env sourced FIRST, local `.env` second (local wins):
 ENV_LAYER = set -a; [ -f "$${STACK_ENV_DIR:-/opt/data/stack-env}/common.env" ] && . "$${STACK_ENV_DIR:-/opt/data/stack-env}/common.env" || true; [ -f ./.env ] && . ./.env || true; set +a;
 ```
 
+### Literal Dollar Signs in Recipes
+
+GNU make **silently drops every lone `$` that is not followed by `(`, `{`, or `$`** — verified on GNU Make 4.3 and 4.4.1 (both drop `$x`, `$/`, `$.`, `$-`, `$*`, `$'`). Only the three sequences `$$`, `$(`, `${` are recognized; anything else swallows the dollar sign with no warning.
+
+Every literal dollar in a recipe — e.g., an awk/sed regex end anchor like `[[:space:]]*$` — must therefore be written as `$$`; the shell then receives exactly one `$` (safe inside single quotes).
+
+Real incident (ha-stack, 2026-11-06): `probe-device`'s awk program contained `devices:[[:space:]]*$/{f=1;next}`. After expansion gawk received the program without the end anchor → syntax error → empty result → the target silently exited 0 reporting "no USB devices declared" while a device WAS declared. Audit existing Makefiles for lone-`$`: `grep -nE '(^|[^$])\$([^${(]|$)' Makefile`.
+
 ## 8. setup.sh Subcommands
 
 The setup script is called by Makefile targets and supports these subcommands:
