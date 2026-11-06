@@ -33,6 +33,7 @@ Deep dives into how each stack works, its services, data layout, secrets, and go
 - **[conventions.md](conventions.md)** — Shared patterns every stack follows
 - **[deployment.md](deployment.md)** — How setup and teardown provision/deprovision stacks (user/group creation, ownership, sudoers, secrets)
 - **[new-stack-guide.md](new-stack-guide.md)** — Step-by-step to create a new container stack from scratch
+- **[kanban.md](kanban.md)** — Tracking projects with Hermes' built-in kanban board (CLI, boards, dependencies, agent-dispatched tasks)
 
 ## 3rd-Party Documentation
 
