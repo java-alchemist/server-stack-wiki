@@ -6,6 +6,7 @@ hosts:
   tva:
     ssh: bfrey@tva          # BatchMode ssh — bootstrap/manual recovery only, not the v1 transport
     agent_port: 8461        # daedalus-agent daemon, tailnet-only bind (see .plans/daedalus.md)
+    authentik_url: https://authentik.tail6a7569.ts.net   # IdP for agent auth (per-app endpoints /application/o/daedalus/)
 
 stacks:
   dns:       { host: tva, path: /opt/data/dns-stack }
