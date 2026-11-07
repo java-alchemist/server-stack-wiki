@@ -51,6 +51,7 @@ One `daedalus-agent` per host. Replaces SSH as the transport: structured data wi
 
 - **Auth:** Bearer token, random 32-char key generated at install. Host-side: `/opt/data/daedalus-agent/.token` (600). Client-side: `~/.config/daedalus/tokens.yaml` — local only, never committed; fleet.yaml stays secret-free.
 - **Network:** binds the tailnet interface on port 8461 (no host ports published elsewhere; no SERVE needed for an API).
+- **Ops execution:** command templates are configurable via env/config — production defaults run the real `make`/podman commands; test mode points at stub scripts. This is what makes containerized integration testing possible without nested podman.
 - **Bootstrap:** one-time SSH install via `daedalus agent install --host tva` (copies binary + systemd unit, generates token) — after that, SSH is never needed again.
 
 ## Fleet model
@@ -80,6 +81,15 @@ Daedalus never touches containers directly — the agent runs the same make targ
 - **TUI** — k9s-style: fleet table with live refresh (~5 s), select → detail pane (containers/images/git state), keys to run actions + log tail. No logic beyond core.
 - **GUI** — Compose Desktop themed to IntelliJ's design language (Darcula/new-UI palette, JetBrains fonts via custom MaterialTheme). Close to the IDEA look; not literal IDE chrome. Fleet table → stack detail → actions/logs.
 - **MCP** — stdio transport for local agent integration (Hermes MCP server entry: `command: daedalus, args: [mcp]`). Tools map 1:1 to core ops: `stacks_list`, `stack_show`, `stack_up/down/restart/upgrade/serve`, `stack_logs`. Structured JSON results straight from core data classes.
+
+## Testing
+
+Full-coverage bar — the build fails on `./gradlew check` if it isn't met (JaCoCo gates). JUnit 6 (Jupiter — requires Java 17+ / Kotlin 2.2; we build on GraalVM JDK 21) in every module; no live-tva dependency anywhere in CI — e2e against the real fleet is a manual step inside T10's verification.
+
+- **Unit:** core — fleet.yaml parsing, DTO serialization round-trips, AgentClient against MockWebServer (auth failure, timeout, agent-down errors); cli — argument parsing + command construction; mcp — tool dispatch mapping.
+- **Contract tests (core ↔ agent boundary):** golden JSON fixtures in `core/src/test/resources/contract/` — both modules serialize/deserialize the same files and a test asserts they agree on every field. This is where client/server bugs live, so it gets first-class treatment.
+- **Testcontainers:** integration tests run the real `daedalus-agent` in a container (built from this project) with host ops stubbed via the configurable command templates — full HTTP stack + process-execution path exercised without touching tva and without nested podman. Covers `/health`, `/stacks` (all 9 stacks incl. `containers: false`), op streaming, and exit-code propagation. Git clean/dirty logic is tested against real repos in temp dirs (git is local; no container needed).
+- **Coverage gates:** JaCoCo — core and agent ≥ 90% line coverage on `check`; cli/tui/gui/mcp ≥ 70%. UI rendering itself is excluded from the gate; all state/transformation logic lives in testable view-model classes so the UI layer stays thin.
 
 ## Ticket map (board `daedalus`)
 
