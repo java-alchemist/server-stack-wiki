@@ -4,7 +4,8 @@
 
 hosts:
   tva:
-    ssh: bfrey@tva          # BatchMode ssh, tailnet-resolved hostname
+    ssh: bfrey@tva          # BatchMode ssh — bootstrap/manual recovery only, not the v1 transport
+    agent_port: 8461        # daedalus-agent daemon, tailnet-only bind (see .plans/daedalus.md)
 
 stacks:
   dns:       { host: tva, path: /opt/data/dns-stack }
