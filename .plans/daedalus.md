@@ -4,7 +4,7 @@ Status: agreed 2026-11-06 · v1 scope locked · Kanban board: `daedalus`
 
 ## What it is
 
-Daedalus manages the home server container stacks. One Kotlin core, four frontends over it: CLI (scriptable), TUI (interactive dashboard), GUI (desktop window), MCP server (agent tools). Each stack host runs a small `daedalus-agent` daemon; daedalus talks to agents over HTTP — no SSH in v1. Authentication goes through the fleet's existing IdP (authentik) — no per-agent tokens, and neither client nor agent keeps persistent state.
+Daedalus manages the home server container stacks. One Kotlin core, four frontends over it: CLI (scriptable), TUI (interactive dashboard), GUI (desktop window), MCP server (agent tools). Each stack host runs a small `daedalus-agent` daemon; daedalus talks to agents over HTTP — no SSH in v1. Authentication goes through the fleet's existing IdP (authentik) — no per-agent tokens, and neither client nor agent keeps persistent state beyond an append-only audit log.
 
 - Repo: `java-alchemist/daedalus` · package `software.ascendant.daedalus`
 - Build pattern follows `/opt/data/akctl` (Gradle 8.10.x, GraalVM native image)
@@ -18,7 +18,8 @@ Daedalus manages the home server container stacks. One Kotlin core, four fronten
 | Inventory: `stacks list`, `stack show` | Drift checks (`check`) |
 | Lifecycle wrappers: up/down/restart/upgrade/serve/logs | Stack creation/scaffolding (`create`) |
 | All four frontends, built in parallel from day one | Secrets inventory/rotation |
-| daedalus-agent daemon + one-time SSH bootstrap (incl. authentik identity init) | SSH fallback client (HostClient interface leaves the door open); human OIDC login for GUI/TUI |
+| daedalus-agent daemon + one-time SSH bootstrap (incl. authentik identity init) | SSH fallback client (HostClient interface leaves the door open) |
+| Human OIDC login (authorization code + PKCE) with per-user action attribution | Group-based authorization (who may run which target) |
 
 ## Architecture
 
@@ -49,10 +50,10 @@ One `daedalus-agent` per host. Replaces SSH as the transport: structured data wi
   | `GET /stacks` | fleet inventory: per-stack containers (structured podman data), images+digests, git clean/dirty, ts_state presence |
   | `POST /stacks/<name>/ops/<target>` | run a make target (`up/down/restart/upgrade/serve/logs`) with streaming output; non-zero exit propagates |
 
-- **Auth:** through the fleet's existing IdP (authentik) — no per-agent tokens, nothing stored on host or client. Bootstrap creates an OAuth2 application `daedalus` (client_credentials grant; endpoints under `/application/o/daedalus/`, same pattern as Matrix SSO's `matrix-synapse`) plus a service account — daedalus' "first admin" identity in authentik. At runtime the client exchanges its client credentials for a short-lived JWT (`POST /application/o/daedalus/token/`), cached **in memory only**; agents verify it against `/application/o/daedalus/jwks/` (signature + audience + expiry) and fail closed if unverifiable. The only long-lived credential is the generated client secret, kept as a gitignored dotfile in the daedalus repo (`secrets/.authentik-client-secret`, mode 600) — same convention as every other stack's secrets.
+- **Auth:** through the fleet's existing IdP (authentik) — no per-agent tokens, nothing stored on host or client except the audit log. Bootstrap creates one OAuth2 application `daedalus` with two grants (endpoints under `/application/o/daedalus/`, same pattern as Matrix SSO's `matrix-synapse`): **authorization code + PKCE** for humans — CLI/TUI/GUI open a browser, the operator signs in to authentik (already SSO'd), and daedalus receives a JWT carrying *that user's* identity; and **client_credentials** for non-interactive use (the MCP server) under the `daedalus` service account. Access tokens live in memory only; refresh tokens go to the OS keychain, never plaintext files. Agents verify every JWT against `/application/o/daedalus/jwks/` (signature + audience + expiry), fail closed if unverifiable, and **attribute every action to the token's `sub`** — an append-only audit log at `/opt/data/daedalus-agent/audit.log` (JSON lines: timestamp, user, stack, target, exit code) records who did what. No action runs under a generic or unattributed identity; the only long-lived credential is the generated client secret, kept as a gitignored dotfile in the daedalus repo (`secrets/.authentik-client-secret`, mode 600).
 - **Network:** binds the tailnet interface on port 8461 (no host ports published elsewhere; no SERVE needed for an API).
 - **Ops execution:** command templates are configurable via env/config — production defaults run the real `make`/podman commands; test mode points at stub scripts. This is what makes containerized integration testing possible without nested podman.
-- **Bootstrap:** one-time SSH install via `daedalus agent install --host tva`: copies binary + systemd unit, clones server-stack-wiki on the host (the agent reads fleet.yaml from it), and — because tva hosts authentik — initializes daedalus' identity in authentik using the existing admin key at `/opt/data/stack-env/.authentik_api_key` (idempotent: OAuth app `daedalus` + service account). The installer relays the generated client secret to WSL exactly once, where it lands in the gitignored dotfile above. After that, SSH is never needed again.
+- **Bootstrap:** one-time SSH install via `daedalus agent install --host tva`: copies binary + systemd unit, clones server-stack-wiki on the host (the agent reads fleet.yaml from it), and — because tva hosts authentik — initializes daedalus' identity in authentik using the existing admin key at `/opt/data/stack-env/.authentik_api_key` (idempotent: OAuth app `daedalus` with both grants + loopback redirect URI `http://127.0.0.1:8462/callback`, plus the service account). The installer relays the generated client secret to WSL exactly once, where it lands in the gitignored dotfile above. After that, SSH is never needed again.
 
 ## Fleet model
 
@@ -68,38 +69,38 @@ stacks:
 
 ## Operations → agent calls
 
-Daedalus never touches containers directly — the agent runs the same make targets a human would.
+Daedalus never touches containers directly — the agent runs the same make targets a human would. Every request carries the requesting identity's JWT; the agent attributes it in the audit log.
 
 | daedalus | agent call | host action |
 |---|---|---|
 | inventory (`stacks list`, `stack show`) | `GET /stacks` | `podman ps -a --format json` as stack user (via sudoers), git status, ts_state check — audit ticket confirms the sudoers rule covers this per stack |
-| `stack up\|down\|restart\|upgrade\|serve <n>` | `POST /stacks/<n>/ops/<target>` | `cd <path> && make <target>` |
-| `stack logs <n> [-s svc] [--tail N]` | `POST /stacks/<n>/ops/logs` (params) | `make logs [SERVICE=svc TAIL=N]` |
+| `stack up\|down\|restart\|upgrade\|serve <n>` | `POST /stacks/<n>/ops/<target>` | `cd <path> && make <target>` + audit entry (user, target, exit code) |
+| `stack logs <n> [-s svc] [--tail N]` | `POST /stacks/<n>/ops/logs` (params) | `make logs [SERVICE=svc TAIL=N]` + audit entry |
 
 ## Frontend notes
 
-- **TUI** — k9s-style: fleet table with live refresh (~5 s), select → detail pane (containers/images/git state), keys to run actions + log tail. No logic beyond core.
-- **GUI** — Compose Desktop themed to IntelliJ's design language (Darcula/new-UI palette, JetBrains fonts via custom MaterialTheme). Close to the IDEA look; not literal IDE chrome. Fleet table → stack detail → actions/logs.
-- **MCP** — stdio transport for local agent integration (Hermes MCP server entry: `command: daedalus, args: [mcp]`). Tools map 1:1 to core ops: `stacks_list`, `stack_show`, `stack_up/down/restart/upgrade/serve`, `stack_logs`. Structured JSON results straight from core data classes.
+- **TUI** — k9s-style: fleet table with live refresh (~5 s), select → detail pane (containers/images/git state), keys to run actions + log tail. No logic beyond core. Shows the logged-in user; all actions attributed to them.
+- **GUI** — Compose Desktop themed to IntelliJ's design language (Darcula/new-UI palette, JetBrains fonts via custom MaterialTheme). Close to the IDEA look; not literal IDE chrome. Fleet table → stack detail → actions/logs. Header shows the logged-in user and prompts OIDC login when no session exists.
+- **MCP** — stdio transport for local agent integration (Hermes MCP server entry: `command: daedalus, args: [mcp]`). Tools map 1:1 to core ops: `stacks_list`, `stack_show`, `stack_up/down/restart/upgrade/serve`, `stack_logs`. Structured JSON results straight from core data classes. Runs non-interactively under the `daedalus` service account (client_credentials) — audit entries attribute those actions to the machine identity, never a human.
 
 ## Testing
 
 Full-coverage bar — the build fails on `./gradlew check` if it isn't met (JaCoCo gates). JUnit 6 (Jupiter — requires Java 17+ / Kotlin 2.2; we build on GraalVM JDK 21) in every module; no live-tva or live-authentik dependency anywhere in CI — e2e against the real fleet is a manual step inside T10's verification.
 
-- **Unit:** core — fleet.yaml parsing, DTO serialization round-trips, AgentClient against MockWebServer (bad token, expired JWT, timeout, agent-down errors); cli — argument parsing + command construction; mcp — tool dispatch mapping.
+- **Unit:** core — fleet.yaml parsing, DTO serialization round-trips, AgentClient against MockWebServer (bad token, expired JWT, timeout, agent-down errors), OIDC PKCE flow against a MockWebServer fake authentik (code exchange, refresh); cli — argument parsing + command construction; mcp — tool dispatch mapping.
 - **Contract tests (core ↔ agent boundary):** golden JSON fixtures in `core/src/test/resources/contract/` — both modules serialize/deserialize the same files and a test asserts they agree on every field. This is where client/server bugs live, so it gets first-class treatment.
-- **Testcontainers:** integration tests run the real `daedalus-agent` in a container (built from this project) with host ops stubbed via the configurable command templates — full HTTP stack + process-execution path exercised without touching tva and without nested podman. Covers `/health`, `/stacks` (all 9 stacks incl. `containers: false`), op streaming, exit-code propagation, and token rejection (agent auth verified against a **stub JWKS** — no live authentik in CI). Git clean/dirty logic is tested against real repos in temp dirs (git is local; no container needed).
+- **Testcontainers:** integration tests run the real `daedalus-agent` in a container (built from this project) with host ops stubbed via the configurable command templates — full HTTP stack + process-execution path exercised without touching tva and without nested podman. Covers `/health`, `/stacks` (all 9 stacks incl. `containers: false`), op streaming, exit-code propagation, token rejection (agent auth verified against a **stub JWKS** — no live authentik in CI), and audit-log attribution for user vs machine tokens. Git clean/dirty logic is tested against real repos in temp dirs (git is local; no container needed).
 - **Coverage gates:** JaCoCo — core and agent ≥ 90% line coverage on `check`; cli/tui/gui/mcp ≥ 70%. UI rendering itself is excluded from the gate; all state/transformation logic lives in testable view-model classes so the UI layer stays thin.
 
 ## Ticket map (board `daedalus`)
 
 ```
-T1 scaffold repo+GitHub ─┬→ T9 agent daemon → T10 deploy to tva ──┐
-                         │                                        ├→ T4 CLI inventory
-T2 audit fleet.yaml ─────┴→ T3 core (HostClient + ops) ───────────┤→ T5 CLI lifecycle
-                                                                  ├→ T6 TUI (Mordant)
-                                                                  ├→ T7 GUI (Compose Desktop)
-                                                                  └→ T8 MCP server
+T1 scaffold repo+GitHub ─┬→ T9 agent daemon ──────────────────────┐
+                         │                                        ├→ T10 deploy to tva → T4 CLI inventory
+T2 audit fleet.yaml ────┴→ T3 core → T11 OIDC user login ─────────┘        ├→ T5 CLI lifecycle
+                                                                            ├→ T6 TUI (Mordant)
+                                                                            ├→ T7 GUI (Compose Desktop)
+                                                                            └→ T8 MCP server
 ```
 
-Both infra chains (agent, core) start immediately and run in parallel; all four frontends fan out once core + a live agent exist.
+Both infra chains start immediately and run in parallel; all four frontends fan out once core + login + a live agent exist.
