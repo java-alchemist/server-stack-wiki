@@ -14,6 +14,9 @@ The conventions below apply to any host running this fleet pattern. The table sh
 | Jellyfin | `jellyfin-stack` | `/opt/data/jellyfin-stack` | `jellyfin` | `jellyfin` | Media streaming server |
 | Immich | `immich-stack` | `/opt/data/immich-stack` | `immich` | `immich` | Self-hosted photo library |
 | Synapse | `synapse-stack` | `/opt/data/synapse-stack` | `synapse` | `synapse` | Matrix homeserver + Element Web (chat/federation) |
+| Authentik | `authentik-stack` | `/opt/data/authentik-stack` | `authentik` | `authentik` | Identity provider — users, groups, SSO/OIDC |
+| CA | `ca-stack` | `/opt/data/ca-stack` | `ca` | `ca` | Home certificate authority (step-ca) + cert-install page |
+| Server env | `server-stack` | `/opt/data/server-stack` | — (operator-driven) | — | Owns the shared `/opt/data/stack-env`; no containers |
 
 All repos live under `java-alchemist` on GitHub. No host ports — everything is tailnet-only via Tailscale SERVE.
 
@@ -34,6 +37,7 @@ Deep dives into how each stack works, its services, data layout, secrets, and go
 - **[deployment.md](deployment.md)** — How setup and teardown provision/deprovision stacks (user/group creation, ownership, sudoers, secrets)
 - **[new-stack-guide.md](new-stack-guide.md)** — Step-by-step to create a new container stack from scratch
 - **[kanban.md](kanban.md)** — Tracking projects with Hermes' built-in kanban board (CLI, boards, dependencies, agent-dispatched tasks)
+- **[Daedalus design](.plans/daedalus.md)** — Fleet control plane tool (Kotlin/GraalVM; CLI/TUI/GUI/MCP over one core); machine-readable fleet definition in [fleet.yaml](fleet.yaml)
 
 ## 3rd-Party Documentation
 

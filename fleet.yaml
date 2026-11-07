@@ -1,0 +1,18 @@
+# Daedalus fleet definition — single source of truth for hosts + stacks.
+# Read by daedalus from a local clone of this repo (default /opt/data/server-stack-wiki).
+# Adding a host or stack = one block below + commit. See .plans/daedalus.md.
+
+hosts:
+  tva:
+    ssh: bfrey@tva          # BatchMode ssh, tailnet-resolved hostname
+
+stacks:
+  dns:       { host: tva, path: /opt/data/dns-stack }
+  dozzle:    { host: tva, path: /opt/data/dozzle-stack }
+  ha:        { host: tva, path: /opt/data/ha-stack }
+  jellyfin:  { host: tva, path: /opt/data/jellyfin-stack }
+  immich:    { host: tva, path: /opt/data/immich-stack }
+  synapse:   { host: tva, path: /opt/data/synapse-stack }
+  authentik: { host: tva, path: /opt/data/authentik-stack }
+  ca:        { host: tva, path: /opt/data/ca-stack }
+  server:    { host: tva, path: /opt/data/server-stack, containers: false }   # owns /opt/data/stack-env; no podman
