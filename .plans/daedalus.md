@@ -73,7 +73,7 @@ Daedalus never touches containers directly — the agent runs the same make targ
 
 | daedalus | agent call | host action |
 |---|---|---|
-| inventory (`stacks list`, `stack show`) | `GET /stacks` | `podman ps -a --format json` as stack user (via sudoers), git status, ts_state check — audit ticket confirms the sudoers rule covers this per stack |
+| inventory (`stacks list`, `stack show`) | `GET /stacks` | `make status` parse (running containers only — raw podman is NOT in the sudoers rules; see decision below), git status, ts_state check |
 | `stack up\|down\|restart\|upgrade\|serve <n>` | `POST /stacks/<n>/ops/<target>` | `cd <path> && make <target>` + audit entry (user, target, exit code) |
 | `stack logs <n> [-s svc] [--tail N]` | `POST /stacks/<n>/ops/logs` (params) | `make logs [SERVICE=svc TAIL=N]` + audit entry |
 
@@ -104,3 +104,13 @@ T2 audit fleet.yaml ────┴→ T3 core → T11 OIDC user login ───
 ```
 
 Both infra chains start immediately and run in parallel; all four frontends fan out once core + login + a live agent exist.
+
+## Inventory data source — decision (2026-11-07, T2 fleet audit)
+
+Live verification on tva (`sudo -n -l` + direct probe): each stack's sudoers rule allows ONLY the enumerated `/usr/bin/make <target>` commands with `CWD=<stackdir>`. Raw podman is NOT permitted — probe `sudo -n -u dns podman ps -a --format json` → "a password is required" (rc=1).
+
+**Decision: daedalus-agent parses `make status` output for container inventory in v1.** Consequences:
+- Inventory covers RUNNING containers only (`podman ps` without `-a`); stopped/exited containers are invisible. Acceptable for v1 — the boot-time autostart convention means a healthy stack has all its containers running, and an empty table is itself a signal (stack down).
+- No image digests in inventory; `stack show` reports what the status table carries (name, image tag, state/health). Digest-level detail deferred.
+- All 8 container stacks' rules include `status`; server-stack has no containers (`containers: false`) — its inventory is git state only.
+- If structured podman data becomes required later: extend each stack's sudoers rule with `/usr/bin/podman ps -a --format json` (requires re-running `_bootstrap` per stack, root) — follow-up, not v1.
