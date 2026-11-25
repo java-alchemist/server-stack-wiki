@@ -29,7 +29,8 @@ Before doing anything, the script checks if host prerequisites are met. If all a
 Triggers that force a bootstrap (one sudo):
 - Stack user does not exist (`id <user>` fails)
 - Stack user is not in the `server-stack` group (needed to read shared secrets from `$STACK_ENV_DIR/`)
-- Repo root ownership doesn't match `<operator>:<stack-user> 2775` (happens on fresh clone)
+- Repo root ownership doesn't match `<operator>:<stack-user> 2775` (happens on fresh clone or relocation)
+- `shared-deps` declares a file not yet registered in `$STACK_ENV_DIR/.stack-manifest` (happens after a git pull that adds a dependency — bootstrap also refreshes the sudoers rule, so new make targets take effect)
 - External data dirs exist but are owned by a different user
 
 ### Bootstrap Phase (`_bootstrap`, runs as root)
