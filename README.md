@@ -2,9 +2,11 @@
 
 Living documentation for the container fleet — how each stack repo works, how they share state, and how to set up a new one.
 
-## Fleet Overview (tva example)
+## Fleet Overview
 
-The conventions below apply to any host running this fleet pattern. The table shows the current deployment on `tva` as an example.
+The conventions below apply to any host running this fleet pattern. Two hosts are currently deployed.
+
+### tva
 
 | Stack | Repo | Host Path (on tva) | User | Tailscale Node | Purpose |
 |-------|------|--------------------|------|----------------|---------|
@@ -18,7 +20,18 @@ The conventions below apply to any host running this fleet pattern. The table sh
 | CA | `ca-stack` | `/opt/data/ca-stack` | `ca` | `ca` | Home certificate authority (step-ca) + cert-install page |
 | Server env | `server-stack` | `/opt/data/server-stack` | — (operator-driven) | — | Owns the shared `/opt/data/stack-env`; no containers |
 
-All repos live under `java-alchemist` on GitHub. No host ports — everything is tailnet-only via Tailscale SERVE.
+### freya (Kinoite 45 — Ryzen 9800X3D, Radeon AI PRO R9700)
+
+| Stack | Repo | Host Path (on freya) | User | Tailscale Node | Purpose |
+|-------|------|----------------------|------|----------------|---------|
+| Radiance | `radiance-stack` | `/opt/data/radiance-stack` | `radiance` | `radiance`* | Qwen3.8-Flash-Next LLM inference (OpenAI-compatible API) on the R9700 |
+| Server env | `server-stack` | `/opt/data/server-stack` | — (operator-driven) | — | Owns the shared `/opt/data/stack-env`; no containers |
+
+\* freya is not a tailnet node yet: its `.tailscale-authkey` is pending (one-time key from the
+tailnet admin, provisioned by `server-stack make setup`). Until then radiance's sidecar stays down
+and the API answers only on loopback on the box.
+
+All repos live under `java-alchemist` on GitHub. No host ports — everything is tailnet-only via Tailscale SERVE (loopback bindings for operator tooling excepted).
 
 ## Per-Stack Documentation
 
@@ -29,6 +42,7 @@ Deep dives into how each stack works, its services, data layout, secrets, and go
 - **[ha-stack](stacks/ha-stack.md)** — Home Assistant Core + ZHA; USB device passthrough via `make add-device` convention
 - **[jellyfin-stack](stacks/jellyfin-stack.md)** — Media streaming server with VA-API transcoding
 - **[immich-stack](stacks/immich-stack.md)** — Self-hosted photo library (PostgreSQL + Valkey)
+- **[radiance-stack](stacks/radiance-stack.md)** — Qwen3.8-Flash-Next LLM inference (AMD ROCm) with tailnet SERVE access
 - **[synapse-stack](stacks/synapse-stack.md)** — Matrix homeserver (Synapse) + Element Web, federation over SERVE :8448
 
 ## Conventions and Guides
