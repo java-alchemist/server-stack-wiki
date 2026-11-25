@@ -62,6 +62,7 @@ Standard Makefile targets apply. Radiance-specific:
 | `download` | Fetch the 114 GiB model container into `RADIANCE_MODELS` (resumable; runs as operator — owns `/var/mnt/models`) |
 | `rotate-key` | Generate a new `RADIANCE_API_KEY` in `.env` (shown once) and recreate the server to apply it |
 | `serve` | Re-apply the tailscale serve config (restarts the sidecar) |
+| `test` | Full test suite (`tests/run-tests.sh`) — first fleet stack with one: config/secrets/runtime/tailnet/autostart checks. SKIP is acceptable (e.g. model still loading); any FAIL exits non-zero |
 
 Model load takes minutes after every container start — the healthcheck allows a 15-minute
 `start_period`, so `make status` will report "not answering yet" for a while. That is normal, not an error.
