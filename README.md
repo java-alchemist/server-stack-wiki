@@ -24,12 +24,10 @@ The conventions below apply to any host running this fleet pattern. Two hosts ar
 
 | Stack | Repo | Host Path (on freya) | User | Tailscale Node | Purpose |
 |-------|------|----------------------|------|----------------|---------|
-| Radiance | `radiance-stack` | `/opt/data/radiance-stack` | `radiance` | `radiance`* | Qwen3.8-Flash-Next LLM inference (OpenAI-compatible API) on the R9700 |
+| Radiance | `radiance-stack` | `/opt/data/radiance-stack` | `radiance` | `radiance` | Qwen3.8-Flash-Next LLM inference (OpenAI-compatible API) on the R9700 |
 | Server env | `server-stack` | `/opt/data/server-stack` | — (operator-driven) | — | Owns the shared `/opt/data/stack-env`; no containers |
 
-\* freya is not a tailnet node yet: its `.tailscale-authkey` is pending (one-time key from the
-tailnet admin, provisioned by `server-stack make setup`). Until then radiance's sidecar stays down
-and the API answers only on loopback on the box.
+freya is a live tailnet node: `https://radiance.tail6a7569.ts.net` serves (the sidecar's SERVE route and `make test` health checks pass).
 
 All repos live under `java-alchemist` on GitHub. No host ports — everything is tailnet-only via Tailscale SERVE (loopback bindings for operator tooling excepted).
 
@@ -50,6 +48,7 @@ Deep dives into how each stack works, its services, data layout, secrets, and go
 - **[conventions.md](conventions.md)** — Shared patterns every stack follows
 - **[deployment.md](deployment.md)** — How setup and teardown provision/deprovision stacks (user/group creation, ownership, sudoers, secrets)
 - **[new-stack-guide.md](new-stack-guide.md)** — Step-by-step to create a new container stack from scratch
+- **[review-2026-11.md](review-2026-11.md)** — Full-fleet review, 2026-11-27 (per-stack findings + cross-cutting items; supersedes [audit.md](audit.md))
 - **[kanban.md](kanban.md)** — Tracking projects with Hermes' built-in kanban board (CLI, boards, dependencies, agent-dispatched tasks)
 - **[Daedalus design](.plans/daedalus.md)** — Fleet control plane tool (Kotlin/GraalVM; CLI/TUI/GUI/MCP over one core); machine-readable fleet definition in [fleet.yaml](fleet.yaml)
 

@@ -4,7 +4,7 @@ Shared patterns enforced across all container stacks in the fleet. Every new sta
 
 ## 1. One Repo Per App (Fleet Convention)
 
-Each service gets its own git repo, its own system user, and its own Tailscale node identity. No multi-app stacks like the deprecated `media-stack`. All containers run on **rootless Podman** (not rootful Docker).
+Each service gets its own git repo, its own system user, and its own Tailscale node identity. No multi-app stacks like the retired `media-stack` (deleted from GitHub 2026-11-27; superseded by jellyfin-stack + immich-stack). All containers run on **rootless Podman** (not rootful Docker — the one rootful Docker-era experiment, `inference-stack`, was retired 2026-11-27 and superseded by radiance-stack).
 
 **Rationale:** Blast radius isolation. A container escape from Jellyfin lands on the unprivileged `jellyfin` user, not your admin account or another service's runtime state. Rootless Podman already isolates in a user namespace — stacking a dedicated system user on top of that is defense in depth.
 
@@ -27,7 +27,8 @@ Each service gets its own git repo, its own system user, and its own Tailscale n
 │   └── ...               # Stack-specific secrets (e.g. .db_password)
 ├── shared-deps           # List of files this stack reads from /opt/data/stack-env/
 ├── ts_state/             # Tailscale node state (bind mount, survives container restarts)
-│   └── state.soc         # Node identity — DO NOT delete or the node gets a new hostname
+│   └── tailscaled.state  # Node identity (tailscaled's default filename) — DO NOT delete or the node gets a new hostname.
+│                         # Older stacks pin `state.soc` here via TS_STATE_FILENAME in compose (migrated identities) — keep whatever the stack already uses.
 └── [app-specific dirs]   # Config bind mounts, data volumes, scripts/
 ```
 
@@ -41,7 +42,7 @@ Every stack runs as its **own dedicated system user** (e.g., `jellyfin`, `immich
 |---------|-----|-----|
 | Container runtime | `<stack>` user (nologin) | Rootless podman isolates in a user namespace; an escape lands on the unprivileged service account |
 | Repo management | Operator (`bfrey`) + stack user, both in group `server-stack` | You can `git pull` and edit files without sudo |
-| Autostart | systemd unit (`User=<stack>`) | Survives reboots, no manual `make up` needed |
+| Autostart | systemd **user** unit (`~/.config/systemd/user/<stack>.service`, installed by `local-setup`) + linger | Survives reboots, no manual `make up` needed. The older system-unit pattern (`/etc/systemd/system` with `User=<stack>`) is retired — dead templates still in some repos are not used; no stack ships a `User=` unit anymore. |
 
 The operator account belongs to two groups per stack:
 
@@ -93,7 +94,7 @@ Every stack includes a tailscale sidecar. **Standard env block** — all values 
 
 ```yaml
 tailscale:
-  image: docker.io/tailscale/tailscale:latest   # floating tag — watchtower-managed, conservative releases
+  image: docker.io/tailscale/tailscale:v1.102.5 # exact tag pinned — never floating `latest` on sidecars (they carry no watchtower label, so an unpinned tag silently drifts and can break SERVE without any diff to review)
   container_name: <stack>-tailscale
   environment:
     - TS_USERSPACE="true"                        # rootless podman → userspace networking (required)
@@ -140,7 +141,7 @@ tailscale:
 
 ## 6. Dozzle Integration
 
-Every stack runs a `dozzle-agent` service that reports its containers to the central hub (`dozzle-stack`) over mTLS gRPC on port 7007.
+Most stacks run a `dozzle-agent` service that reports its containers to the central hub (`dozzle-stack`) over mTLS gRPC on port 7007. (radiance-stack has none yet — freya's `$STACK_ENV_DIR` lacks the shared mTLS pair; the agent appears once it's provisioned.)
 
 ```yaml
 dozzle-agent:
@@ -213,12 +214,12 @@ The setup script is called by Makefile targets and supports these subcommands:
 
 ### Bootstrap Checklist (root phase)
 
-1. Create system user (`<stack>`) with home dir and `/bin/bash` shell
+1. Create system user (`<stack>`) with home dir and `/usr/sbin/nologin` shell (newer stacks; service accounts need no interactive shell — a few older stacks were created with `/bin/bash` and converge to nologin on re-bootstrap)
 2. Ensure subuid/subgid ranges assigned
 3. Enable linger (`loginctl enable-linger <stack>`) so rootless podman survives logout
 4. Add operator to `server-stack` group; add stack user to `server-stack` group
 5. Install passwordless sudoers rule: `/etc/sudoers.d/<stack>-ops` allowing operator to run Makefile targets as `<stack>` without a password
-6. Set ownership of repo, secrets dir, ts_state dir to `<stack>:<stack>` (repo files group-writable via `server-stack`)
+6. Set ownership: repo dir recursively to `<operator>:<stack-group>` mode 2775 (setgid → git collaboration via the group), then `secrets/` and `ts_state/` **recursively** to `<stack-user>:<stack-group>` (recursive matters — `tailscaled.state` left operator-owned breaks node identity; see radiance-stack gotchas)
 
 ### Local Setup Checklist (stack user phase)
 
@@ -234,14 +235,14 @@ The setup script is called by Makefile targets and supports these subcommands:
 
 ## 10. Watchtower Auto-Update
 
-Every stack runs a watchtower container that monitors its services hourly and auto-updates containers with floating tags (`latest`, `release`, `9-alpine`). It rolls back automatically if a recreated container fails its healthcheck within the grace period.
+Most stacks run a watchtower container that monitors its services hourly and auto-updates containers with floating tags (`latest`, `release`, `9-alpine`). It rolls back automatically if a recreated container fails its healthcheck within the grace period. Exceptions: radiance-stack has none yet; ha-stack deliberately ships none (HA Core config is versioned with forward-only migrations, and tva's podman 4.9 + cgroupv2 breaks watchtower recreations).
 
 Check what was updated:
 ```bash
 make logs SERVICE=watchtower   # see updates, rollbacks, or skips
 ```
 
-**Not managed by watchtower:** Tailscale sidecars (no label — they handle their own upgrades) and immich postgres (digest-pinned — DB must be upgraded manually in lockstep with the app). Everything else updates automatically.
+**Not managed by watchtower:** Tailscale sidecars (no label — exact-pinned tags, bumped manually) and immich postgres (digest-pinned — DB must be upgraded manually in lockstep with the app). Everything else updates automatically.
 
 ## 11. Upgrade Process
 

@@ -26,7 +26,7 @@ No host ports — everything is exposed through Tailscale SERVE only.
 | Immich photos/videos | `/mnt/samba_storage/Immich` (CIFS bind mount) | Network storage — host dir must exist before `make up`. CIFS ownership is a no-op; access is via the stack user. |
 | PostgreSQL data | Named volume `immich_pgdata` (local disk) | Local disk only — databases do heavy fsync and file-locking that network shares handle poorly |
 | Valkey/Redis | Ephemeral container storage | Cache/session store — rebuilt from database on restart |
-| Tailscale node state | `./ts_state/state.soc` bind mount | Persistent identity — migrated from media-stack, DO NOT delete |
+| Tailscale node state | `./ts_state/tailscaled.state` bind mount | Persistent identity, DO NOT delete (compose sets no `TS_STATE_FILENAME` → tailscaled default name) |
 
 ## Secrets
 

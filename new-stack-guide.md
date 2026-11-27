@@ -81,7 +81,7 @@ services:
     restart: unless-stopped
 
   tailscale:
-    image: docker.io/tailscale/tailscale:latest   # floating tag — watchtower-managed
+    image: docker.io/tailscale/tailscale:v1.102.5 # exact tag pinned — sidecars carry no watchtower label, never floating `latest` (conventions §5)
     container_name: <stack>-tailscale
     environment:
       - TS_USERSPACE="true"                      # rootless podman → userspace networking (required)
@@ -300,7 +300,7 @@ Verify:
 - [ ] Stack user exists and has linger enabled (`loginctl show-user <app> -p Linger`)
 - [ ] Operator can edit repo files without sudo (group `server-stack` grants write)
 - [ ] `.env` is gitignored, `secrets/` is gitignored
-- [ ] `ts_state/state.soc` exists after first tailscale auth (node identity persisted)
+- [ ] `ts_state/tailscaled.state` exists after first tailscale auth (node identity persisted)
 - [ ] Dozzle agent endpoint registered in `$STACK_ENV_DIR/dozzle-agents.d/<stack>`
 - [ ] SERVE routes work: HTTPS on :443, dozzle-agent reachable on :7007
 - [ ] `make validate` passes (compose config dry-run)

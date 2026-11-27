@@ -29,7 +29,7 @@ Before doing anything, the script checks if host prerequisites are met. If all a
 Triggers that force a bootstrap (one sudo):
 - Stack user does not exist (`id <user>` fails)
 - Stack user is not in the `server-stack` group (needed to read shared secrets from `$STACK_ENV_DIR/`)
-- Repo root ownership doesn't match `<operator>:<stack-user> 2775` (happens on fresh clone or relocation)
+- Repo root ownership doesn't match `<operator>:<stack-group> 2775` (happens on fresh clone or relocation)
 - `shared-deps` declares a file not yet registered in `$STACK_ENV_DIR/.stack-manifest` (happens after a git pull that adds a dependency — bootstrap also refreshes the sudoers rule, so new make targets take effect)
 - External data dirs exist but are owned by a different user
 
@@ -40,12 +40,12 @@ Creates host-level prerequisites. Every step is idempotent — re-running conver
 | Step | What it does | Idempotent? |
 |------|-------------|-------------|
 | 1. Determine operator | Resolves the invoking user from `$SUDO_USER` or repo file ownership | — |
-| 2. Create stack user | `useradd -m -s /bin/bash <stack-user>` with home dir and auto-assigned subuid/subgid ranges. If user exists, repairs missing home dir. | ✓ (skips if present) |
+| 2. Create stack user | `useradd -m -s /usr/sbin/nologin <stack-user>` with home dir and auto-assigned subuid/subgid ranges (newer stacks use the nologin shell — service accounts need no interactive login; older stacks created with `/bin/bash` converge to nologin on re-bootstrap). If user exists, repairs missing home dir. | ✓ (skips if present) |
 | 3. Assign subuid/subgid ranges | Reads `/etc/login.defs` for `SUB_UID_COUNT`/`SUB_GID_COUNT`; allocates the next free ascending block after the current max end. Checks `/etc/subuid` and `/etc/subgid` directly (not getent, since this system has no nsswitch entry for subuid). | ✓ (skips if present) |
 | 4. Group memberships | Adds stack user to `server-stack` (shared secrets access). Some stacks also add to `render`/`video` for GPU device access. | ✓ (skips if already member) |
 | 5. Enable linger | `loginctl enable-linger <stack-user>` — keeps rootless podman running after logout. Verifies it took effect before skipping. | ✓ (checks via loginctl) |
-| 6. Two-tier repo ownership | `chown -R <operator>:<stack-user> <repo-dir>` then `chmod 2775`. The setgid bit on the root dir means new files created by the stack user inherit the operator's group, so git operations work without permission errors. `.env` is re-chowned to `<stack-user>:<stack-user>` after the recursive chown (it holds secrets). | ✓ (checks current owner) |
-| 7. Runtime dirs ownership | `chown -R <stack-user>:<stack-user>` on runtime/state dirs inside the repo (`ts_state/`, app config bind mounts, etc.). Re-asserted every run so a migration never leaves them operator-owned. | ✓ |
+| 6. Two-tier repo ownership | `chown -R <operator>:<stack-group> <repo-dir>` then `chmod 2775`. The setgid bit on the root dir means new files created by the stack user inherit the stack group, so git operations work without permission errors. `.env` is re-chowned to `<stack-user>:<stack-group>` mode **640** after the recursive chown (it holds secrets; the operator keeps read access via the group). | ✓ (checks current owner) |
+| 7. Runtime dirs ownership | `chown -R <stack-user>:<stack-group>` on runtime/state dirs inside the repo (`ts_state/`, app config bind mounts, etc.) — **contents included**: a directory-only re-assert leaves `tailscaled.state` operator-owned and the sidecar loses node identity (radiance-stack gotcha). Re-asserted every run so a migration never leaves them operator-owned. | ✓ |
 | 8. External data dirs | Creates missing dirs (`mkdir -p`), then `chown -R <stack-user>:<stack-group>` if ownership differs from the stack user. Handles migrations from old combined stacks where the dir was owned by a different user. | ✓ (checks current owner) |
 | 9. Install sudoers rule | Writes `/etc/sudoers.d/<stack>-ops` allowing the operator to run specific Makefile targets as `<stack-user>` without a password, scoped to `CWD=<repo-dir>`. Validates via `visudo -cf` before installing. Targets: `setup`, `local-setup`, `up`, `down`, `restart`, `upgrade`, `serve`, `status`, `logs`, `validate`, `teardown`, `local-teardown` (plus any stack-specific targets). | ✓ (overwrites with same content) |
 
@@ -59,7 +59,7 @@ Generates per-stack files and directories. Called after bootstrap, or independen
 | 2. Copy Tailscale auth key | Reads from `$STACK_ENV_DIR/.tailscale-authkey`, copies to `./secrets/.tailscale-authkey` (mode 600). Exits fatally if the shared key is missing — this means dozzle-stack hasn't run setup yet or the server-stack group isn't provisioned. | ✓ (overwrites) |
 | 3. Copy Dozzle mTLS pair | Copies `.dozzle-cert.pem` and `.dozzle-key.pem` from `$STACK_ENV_DIR/` to `./secrets/`. Exits fatally if missing — dozzle-stack's bootstrap must have run first. | ✓ (overwrites) |
 | 4. Stack-specific secrets | Generates secrets unique to this stack (e.g., Immich: DB password via `openssl rand -hex 32 > ./secrets/.db_password`). Only creates the file if it doesn't exist — existing passwords are never regenerated. | ✓ (skips if exists) |
-| 5. Generate .env | Copies `.env.example` to `.env` if `.env` doesn't exist. Appends `PODMAN_SOCKET=/run/user/<uid>/podman/podman.sock`. Existing values are never clobbered — re-runs only add missing lines. Sets ownership to `<stack-user>:<stack-user>`, mode 600. | ✓ (skips if exists) |
+| 5. Generate .env | Copies `.env.example` to `.env` if `.env` doesn't exist. Appends `PODMAN_SOCKET=/run/user/<uid>/podman/podman.sock`. Existing values are never clobbered — re-runs only add missing lines. Sets ownership to `<stack-user>:<stack-group>`, mode 640 (operator reads via the stack group). | ✓ (skips if exists) |
 | 6. Enable podman.socket | `systemctl --user enable podman.socket` + start. Required so the rootless Podman API socket stays alive for dozzle-agent. Sets `XDG_RUNTIME_DIR` explicitly because `sudo -u` strips it. | ✓ (no-op if enabled) |
 | 7. Create ts_state dir | `mkdir -p ./ts_state`, mode 750, owned by stack user. This is where the Tailscale node identity persists — pre-created so it's never world-readable. | ✓ |
 | 8. Register dozzle agent | If compose has a `dozzle-agent:` service, writes to `$STACK_ENV_DIR/dozzle-agents.d/<stack>` with format `<cert-domain>:7007\|<stack-name>`. Resolves the cert domain from `.env` (`TS_CERT_DOMAIN` or `<APP>_TS_CERT_DOMAIN`). Only writes if the registry dir exists and is writable. | ✓ (overwrites) |

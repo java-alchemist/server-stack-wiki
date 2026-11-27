@@ -1,5 +1,11 @@
 # Stack Audit — Convention Adherence
 
+> **SUPERSEDED (2026-11-27)** — replaced by the full-fleet review: **[review-2026-11.md](review-2026-11.md)**.
+> Kept for history only. Outdated in this page: the jellyfin/immich paths (`/opt/data/staging/...` — both
+> shipped to `/opt/data/{jellyfin,immich}-stack` long ago), and the tailscale-tag guidance below: the
+> conventions-vs-pinning contradiction is resolved in favor of **pinned exact tags** (conventions §5);
+> the floating-`latest` standardization proposed in "Wiki Corrections Needed" was not adopted.
+
 Findings from reviewing all four active stack repos against the wiki conventions. Grouped by severity.
 
 ## dns-stack (`/opt/data/home/dns-stack`)

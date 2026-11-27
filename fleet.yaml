@@ -7,6 +7,8 @@ hosts:
     ssh: bfrey@tva          # BatchMode ssh — bootstrap/manual recovery only, not the v1 transport
     agent_port: 8461        # daedalus-agent daemon, tailnet-only bind (see .plans/daedalus.md)
     authentik_url: https://authentik.tail6a7569.ts.net   # IdP for agent auth (per-app endpoints /application/o/daedalus/)
+  freya:
+    ssh: bfrey@freya          # Fedora Kinoite 45 — Radeon AI PRO R9700 (Navi 48, gfx1201; GPU index 0 only — never the iGPU), ~249 GiB RAM, models on /var/mnt/models (XFS NVMe 3.7 TB), podman 6.2 rootless, no Docker
 
 stacks:
   dns:       { host: tva, path: /opt/data/dns-stack }
@@ -18,3 +20,4 @@ stacks:
   authentik: { host: tva, path: /opt/data/authentik-stack }
   ca:        { host: tva, path: /opt/data/ca-stack }
   server:    { host: tva, path: /opt/data/server-stack, containers: false }   # owns /opt/data/stack-env; no podman
+  radiance:  { host: freya, path: /opt/data/radiance-stack }                   # LLM engine + tailscale sidecar; stack user radiance (uid 1002); model 'flashnext' on loopback :8000 → https://radiance.tail6a7569.ts.net
